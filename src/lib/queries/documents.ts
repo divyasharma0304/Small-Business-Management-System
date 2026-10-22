@@ -15,6 +15,7 @@ export async function loadPickerItems(ctx: RequiredContext, purpose: "sale" | "p
     stock_quantity: i.stock_quantity == null ? null : Number(i.stock_quantity),
     avg_cost: i.avg_cost == null ? null : Number(i.avg_cost),
     highest_cost: i.highest_cost == null ? null : Number(i.highest_cost),
+    mrp: i.mrp == null ? null : Number(i.mrp),
   }));
 }
 
@@ -31,4 +32,12 @@ export async function loadCustomers(ctx: RequiredContext) {
 export async function loadSuppliers(ctx: RequiredContext, includeId?: string | null) {
   const { data } = await ctx.supabase.from("suppliers").select("id, name, is_active").eq("business_id", ctx.businessId).order("name").limit(5000);
   return (data ?? []).filter((s) => s.is_active || s.id === includeId).map(({ id, name }) => ({ id, name }));
+}
+
+export async function loadOffers(ctx: RequiredContext) {
+  const { data } = await ctx.supabase.from("offers").select("*").eq("business_id", ctx.businessId).order("priority", { ascending: false }).order("name");
+  return (data ?? []).map((o) => ({
+    ...o,
+    tiers: ((o.tiers ?? []) as { min_qty: number; discount_pct: number }[]).map((t) => ({ min_qty: Number(t.min_qty), discount_pct: Number(t.discount_pct) })),
+  })) as import("@/lib/calc/offers").Offer[];
 }

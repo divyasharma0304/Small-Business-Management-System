@@ -12,6 +12,7 @@ export const variantSchema = z
     name: z.string().trim().max(200).default(""),
     sku: optionalText(64),
     selling_price: money("Selling price"),
+    mrp: optionalNonNegative("MRP"),
     cost_price: money("Cost"),
     attributes,
     image_path: optionalText(500),

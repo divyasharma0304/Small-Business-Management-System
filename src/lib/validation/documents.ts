@@ -7,6 +7,8 @@ export const lineSchema = z.object({
   unit_price: money("Price"),
   discount_amount: money("Discount").default(0),
   tax_rate: percent("Tax rate").default(0),
+  offer_id: optionalUuid,
+  offer_label: optionalText(200),
 });
 
 export const orderSchema = z.object({

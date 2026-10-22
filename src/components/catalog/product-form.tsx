@@ -8,6 +8,7 @@ import { Field, FormSection } from "@/components/forms/field";
 import { FileUpload } from "@/components/forms/file-upload";
 import { SimpleSelect } from "@/components/forms/simple-select";
 import { useCurrency } from "@/components/money";
+import { PriceFields } from "@/components/catalog/price-fields";
 import { ToggleRow } from "@/components/settings/business-profile-fields";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -98,6 +99,7 @@ export function ProductForm({
         name: p.has_variants ? v.name : "Default",
         sku: v.sku,
         selling_price: sells ? v.selling_price || "0" : "0",
+        mrp: sells && v.mrp !== "" ? v.mrp : null,
         cost_price: p.cost_method === "components" && !p.has_variants ? String(componentsTotal) : v.cost_price || "0",
         attributes: v.attributes,
         image_path: v.image_path,
@@ -196,14 +198,12 @@ export function ProductForm({
       {!p.has_variants ? (
         <FormSection title={sells ? "Price, cost & stock" : "Cost & stock"}>
           <div className="grid gap-4 sm:grid-cols-3">
+            {sells && (
+              <PriceFields id={v0.key} mrp={v0.mrp} price={v0.selling_price} symbol={symbol} error={errors["variants.0.selling_price"]} onChange={(x) => patchVariant(v0.key, x)} />
+            )}
             <Field label="SKU / code" htmlFor="sku" error={errors["variants.0.sku"]}>
               <Input id="sku" value={v0.sku} onChange={(e) => patchVariant(v0.key, { sku: e.target.value })} />
             </Field>
-            {sells && (
-              <Field label={`Selling price (${symbol})`} htmlFor="price" error={errors["variants.0.selling_price"]}>
-                <Input id="price" type="number" min={0} step="0.01" inputMode="decimal" value={v0.selling_price} onChange={(e) => patchVariant(v0.key, { selling_price: e.target.value })} />
-              </Field>
-            )}
             {p.cost_method !== "components" && (
               <Field label={`Standard cost (${symbol})`} htmlFor="cost" error={errors["variants.0.cost_price"]} hint={tracks ? "Your estimate. Actual stock cost comes from purchases/production." : "Used as the cost of each sale."}>
                 <Input id="cost" type="number" min={0} step="0.01" inputMode="decimal" value={v0.cost_price} onChange={(e) => patchVariant(v0.key, { cost_price: e.target.value })} />
@@ -218,22 +218,22 @@ export function ProductForm({
           <div className="grid gap-3">
             {p.variants.map((v, i) => (
               <div key={v.key} className={cn("grid gap-3 rounded-lg border p-3", !v.is_active && "opacity-60")}>
-                <div className="grid gap-3 sm:grid-cols-4">
+                <div className="grid gap-3 sm:grid-cols-3">
                   <Field label="Variant name" htmlFor={`vn-${v.key}`} required error={errors[`variants.${i}.name`]}>
                     <Input id={`vn-${v.key}`} value={v.name} placeholder="e.g. Large / Lavender" onChange={(e) => patchVariant(v.key, { name: e.target.value })} />
                   </Field>
                   <Field label="SKU" htmlFor={`vs-${v.key}`}>
                     <Input id={`vs-${v.key}`} value={v.sku} onChange={(e) => patchVariant(v.key, { sku: e.target.value })} />
                   </Field>
-                  {sells && (
-                    <Field label={`Price (${symbol})`} htmlFor={`vp-${v.key}`} error={errors[`variants.${i}.selling_price`]}>
-                      <Input id={`vp-${v.key}`} type="number" min={0} step="0.01" value={v.selling_price} onChange={(e) => patchVariant(v.key, { selling_price: e.target.value })} />
-                    </Field>
-                  )}
                   <Field label={`Standard cost (${symbol})`} htmlFor={`vc-${v.key}`}>
                     <Input id={`vc-${v.key}`} type="number" min={0} step="0.01" value={v.cost_price} onChange={(e) => patchVariant(v.key, { cost_price: e.target.value })} />
                   </Field>
                 </div>
+                {sells && (
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <PriceFields id={v.key} mrp={v.mrp} price={v.selling_price} symbol={symbol} error={errors[`variants.${i}.selling_price`]} onChange={(x) => patchVariant(v.key, x)} compact />
+                  </div>
+                )}
                 {attributeDefs.length > 0 && (
                   <AttributeInputs defs={attributeDefs} value={v.attributes} onChange={(a) => patchVariant(v.key, { attributes: a })} compact />
                 )}
@@ -253,7 +253,7 @@ export function ProductForm({
               </div>
             ))}
           </div>
-          <Button type="button" variant="outline" className="justify-self-start" onClick={() => patch({ variants: [...p.variants, emptyVariant({ selling_price: v0.selling_price, cost_price: v0.cost_price })] })}>
+          <Button type="button" variant="outline" className="justify-self-start" onClick={() => patch({ variants: [...p.variants, emptyVariant({ selling_price: v0.selling_price, mrp: v0.mrp, cost_price: v0.cost_price })] })}>
             <Plus /> Add variant
           </Button>
         </FormSection>

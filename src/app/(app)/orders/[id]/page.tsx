@@ -112,7 +112,8 @@ export default async function OrderPage({ params }: PageProps<"/orders/[id]">) {
                     <TableRow key={i.id}>
                       <TableCell className="pl-6">
                         <Link href={`/inventory/${i.variant_id}`} className="font-medium hover:underline">{i.description}</Link>
-                        {i.sku && <div className="text-xs text-muted-foreground">{i.sku}</div>}
+                        {(i.sku || i.mrp) && <div className="text-xs text-muted-foreground">{[i.sku, i.mrp ? `MRP ₹${Number(i.mrp).toLocaleString("en-IN")}` : null].filter(Boolean).join(" · ")}</div>}
+                        {i.offer_label && <div className="text-xs font-medium text-success">{i.offer_label}</div>}
                       </TableCell>
                       <TableCell className="text-right tabular">{formatQty(i.quantity)}</TableCell>
                       <TableCell className="text-right"><Money value={i.unit_price} /></TableCell>

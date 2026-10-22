@@ -7,6 +7,7 @@ export interface VariantDraft {
   name: string;
   sku: string;
   selling_price: string;
+  mrp: string;
   cost_price: string;
   attributes: Record<string, string>;
   image_path: string | null;
@@ -47,6 +48,7 @@ export function emptyVariant(defaults?: Partial<VariantDraft>): VariantDraft {
     name: "",
     sku: "",
     selling_price: "",
+    mrp: "",
     cost_price: "",
     attributes: {},
     image_path: null,

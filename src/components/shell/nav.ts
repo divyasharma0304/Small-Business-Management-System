@@ -1,4 +1,5 @@
 import {
+  BadgePercent,
   BarChart3,
   Boxes,
   CreditCard,
@@ -34,6 +35,7 @@ export const NAV_SECTIONS: { title?: string; items: NavItem[] }[] = [
       { href: "/orders", label: "Orders & Sales", icon: Receipt },
       { href: "/customers", label: "Customers", icon: Users, module: "module_customers" },
       { href: "/payments", label: "Payments", icon: Wallet },
+      { href: "/offers", label: "Offers", icon: BadgePercent },
     ],
   },
   {

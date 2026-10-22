@@ -3,7 +3,7 @@ import { OrderForm } from "@/components/orders/order-form";
 import { PageHeader } from "@/components/page-header";
 import { requireContext } from "@/lib/context";
 import { addDays, todayIn } from "@/lib/dates";
-import { loadCustomers, loadPaymentMethods, loadPickerItems } from "@/lib/queries/documents";
+import { loadCustomers, loadOffers, loadPaymentMethods, loadPickerItems } from "@/lib/queries/documents";
 
 export const metadata: Metadata = { title: "New order" };
 
@@ -37,6 +37,7 @@ export default async function NewOrderPage({ searchParams }: PageProps<"/orders/
         deductionStatus={ctx.settings.inventory_deduction_status}
         customersEnabled={ctx.settings.module_customers}
         country={ctx.business.country}
+        offers={await loadOffers(ctx)}
       />
     </>
   );

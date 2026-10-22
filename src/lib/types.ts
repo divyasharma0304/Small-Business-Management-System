@@ -106,6 +106,7 @@ export interface Variant {
   name: string;
   sku: string | null;
   selling_price: number;
+  mrp: number | null;
   cost_price: number;
   attributes: Record<string, string>;
   image_path: string | null;
@@ -256,6 +257,9 @@ export interface OrderItem {
   unit_cost: number | null;
   cogs_amount: number;
   sort_order: number;
+  mrp: number | null;
+  offer_id: string | null;
+  offer_label: string | null;
 }
 
 export interface Payment {

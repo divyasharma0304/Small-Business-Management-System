@@ -22,6 +22,11 @@ export interface LineDraft {
    * While set, the unit cost is derived from it: unit cost = total ÷ qty.
    */
   amount?: string;
+  /** Sales: pack offer applied to this line. */
+  offer_id?: string | null;
+  offer_label?: string | null;
+  /** Sales: price typed by hand — offers leave it alone. */
+  price_locked?: boolean;
 }
 
 /** Unit cost from a typed line total, to 4 decimals (e.g. ₹96 ÷ 100 ml = 0.96). */
@@ -74,6 +79,9 @@ export function LinesEditor({
       unit_price: String(mode === "sale" ? item.selling_price : Math.max(item.highest_cost ?? 0, item.avg_cost ?? 0, item.cost_price ?? 0)),
       tax_rate: taxEnabled ? String(item.tax_rate ?? 0) : "0",
       amount: undefined,
+      offer_id: null,
+      offer_label: null,
+      price_locked: false,
     });
   }
 
@@ -110,8 +118,15 @@ export function LinesEditor({
                   ) : (
                     <span>{item.item_type === "service" ? "Service" : "Stock not tracked"}</span>
                   )}
+                  {mode === "sale" && item.mrp ? <span className="ml-2">· MRP {format(item.mrp)}</span> : null}
                 </p>
               )}
+              {mode === "sale" && l.offer_label && <p className="px-1 text-xs font-medium text-success">{l.offer_label}</p>}
+              {mode === "sale" && l.price_locked && item?.mrp ? (
+                <button type="button" className="px-1 text-xs text-primary hover:underline" onClick={() => patch(l.key, { price_locked: false })}>
+                  Price set by hand — use offers/standard price
+                </button>
+              ) : null}
             </div>
             <LabeledInput
               label="Qty"
@@ -123,7 +138,7 @@ export function LinesEditor({
             <LabeledInput
               label={mode === "sale" ? "Unit price" : "Cost per unit"}
               value={l.unit_price}
-              onChange={(v) => patch(l.key, { unit_price: v, amount: undefined })}
+              onChange={(v) => patch(l.key, mode === "sale" ? { unit_price: v, amount: undefined, price_locked: true, offer_id: null, offer_label: null } : { unit_price: v, amount: undefined })}
               step="any"
               invalid={!!errors[`lines.${i}.unit_price`]}
             />

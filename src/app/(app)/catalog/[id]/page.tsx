@@ -79,6 +79,7 @@ export default async function ProductPage({ params }: PageProps<"/catalog/[id]">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="pl-6">{product.has_variants ? "Variant" : "SKU"}</TableHead>
+                    {product.item_type !== "material" && <TableHead className="hidden text-right sm:table-cell">MRP</TableHead>}
                     {product.item_type !== "material" && <TableHead className="text-right">Price</TableHead>}
                     <TableHead className="text-right">Std. cost</TableHead>
                     {product.item_type !== "material" && <TableHead className="hidden text-right sm:table-cell">Margin</TableHead>}
@@ -107,6 +108,11 @@ export default async function ProductPage({ params }: PageProps<"/catalog/[id]">
                             {!v.is_active && <StatusBadge status="inactive" />}
                           </div>
                         </TableCell>
+                        {product.item_type !== "material" && (
+                          <TableCell className="hidden text-right sm:table-cell">
+                            {v.mrp ? <><Money value={v.mrp} /><div className="text-xs text-muted-foreground">{Math.round(((v.mrp - v.selling_price) / v.mrp) * 1000) / 10}% off</div></> : "—"}
+                          </TableCell>
+                        )}
                         {product.item_type !== "material" && <TableCell className="text-right"><Money value={v.selling_price} /></TableCell>}
                         <TableCell className="text-right"><Money value={v.cost_price} /></TableCell>
                         {product.item_type !== "material" && <TableCell className="hidden text-right tabular sm:table-cell">{formatPct(margin)}</TableCell>}

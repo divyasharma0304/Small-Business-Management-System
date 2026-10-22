@@ -22,6 +22,9 @@ export interface PickerItem {
   avg_cost: number | null;
   /** Highest of standard cost, average cost and highest price ever paid — used for estimates. */
   highest_cost: number | null;
+  product_id?: string;
+  category_id?: string | null;
+  mrp?: number | null;
 }
 
 /** Searchable item selector (name or SKU) showing stock where tracked. */

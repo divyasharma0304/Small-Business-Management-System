@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { OrderForm } from "@/components/orders/order-form";
 import { PageHeader } from "@/components/page-header";
 import { requireContext } from "@/lib/context";
-import { loadCustomers, loadPaymentMethods, loadPickerItems } from "@/lib/queries/documents";
+import { loadCustomers, loadOffers, loadPaymentMethods, loadPickerItems } from "@/lib/queries/documents";
 import type { Order, OrderItem } from "@/lib/types";
 
 export const metadata: Metadata = { title: "Edit order" };
@@ -27,7 +27,7 @@ export default async function EditOrderPage({ params }: PageProps<"/orders/[id]/
   const missing = lines.filter((l) => !items.some((i) => i.variant_id === l.variant_id));
   const allItems = [
     ...items,
-    ...missing.map((l) => ({ variant_id: l.variant_id, item_name: `${l.description} (inactive)`, sku: l.sku, item_type: "product", unit: "", tax_rate: l.tax_rate, track_inventory: l.track_inventory, selling_price: l.unit_price, cost_price: 0, stock_quantity: null, avg_cost: null, highest_cost: null })),
+    ...missing.map((l) => ({ variant_id: l.variant_id, item_name: `${l.description} (inactive)`, sku: l.sku, item_type: "product", unit: "", tax_rate: l.tax_rate, track_inventory: l.track_inventory, selling_price: l.unit_price, cost_price: 0, stock_quantity: null, avg_cost: null, highest_cost: null, mrp: l.mrp })),
   ];
 
   return (
@@ -55,6 +55,8 @@ export default async function EditOrderPage({ params }: PageProps<"/orders/[id]/
             unit_price: String(l.unit_price),
             discount_amount: l.discount_amount ? String(l.discount_amount) : "",
             tax_rate: String(l.tax_rate),
+            offer_id: l.offer_id,
+            offer_label: l.offer_label,
           })),
         }}
         items={allItems}
@@ -64,6 +66,7 @@ export default async function EditOrderPage({ params }: PageProps<"/orders/[id]/
         deductionStatus={ctx.settings.inventory_deduction_status}
         customersEnabled={ctx.settings.module_customers}
         country={ctx.business.country}
+        offers={await loadOffers(ctx)}
       />
     </>
   );

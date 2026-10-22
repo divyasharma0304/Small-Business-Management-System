@@ -642,3 +642,25 @@ describe("multi-product production batches", () => {
     expect(num((await lvl(small)).quantity)).toBe(0);
   });
 });
+
+describe("MRP and offers", () => {
+  const U4 = "99999999-9999-4999-8999-999999999999";
+  it("stores MRP on variants and snapshots MRP + offer on order lines", async () => {
+    await createUser(db, U4);
+    const b = await rpc<string>(db, U4, "create_business", [{ name: "MRP Co" }]);
+    const p = await rpc<string>(db, U4, "save_product", [b, { name: "Candle", track_inventory: false }, [{ selling_price: 199, mrp: 250 }], []]);
+    const v = await asUser(db, U4, async (tx) => (await tx.query<{ id: string; mrp: string }>("select id, mrp from product_variants where product_id = $1", [p])).rows[0]);
+    expect(num(v.mrp)).toBe(250);
+    const offer = await asUser(db, U4, async (tx) => (await tx.query<{ id: string }>(
+      "insert into offers (business_id, name, tiers, product_ids) values ($1, 'Packs', '[{\"min_qty\":2,\"discount_pct\":28}]', array[$2::uuid]) returning id", [b, p])).rows[0]);
+    const o = await rpc<string>(db, U4, "save_order", [b, { status: "draft" }, [{ variant_id: v.id, quantity: 2, unit_price: 180, offer_id: offer.id, offer_label: "Packs: Pack of 2 – 28% off MRP" }]]);
+    const li = await asUser(db, U4, async (tx) => (await tx.query<Record<string, string>>("select mrp, offer_id, offer_label, unit_price from order_items where order_id = $1", [o])).rows[0]);
+    expect(num(li.mrp)).toBe(250);
+    expect(li.offer_id).toBe(offer.id);
+    expect(num(li.unit_price)).toBe(180);
+    // price change later doesn't touch the order's snapshot
+    await rpc(db, U4, "save_product", [b, { id: p, name: "Candle", track_inventory: false }, [{ id: v.id, selling_price: 220, mrp: 300 }], []]);
+    const li2 = await asUser(db, U4, async (tx) => (await tx.query<{ mrp: string }>("select mrp from order_items where order_id = $1", [o])).rows[0]);
+    expect(num(li2.mrp)).toBe(250);
+  });
+});

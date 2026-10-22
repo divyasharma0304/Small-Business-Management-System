@@ -50,6 +50,7 @@ export default async function EditProductPage({ params }: PageProps<"/catalog/[i
         name: v.is_default ? "" : v.name,
         sku: v.sku ?? "",
         selling_price: String(v.selling_price),
+        mrp: v.mrp == null ? "" : String(v.mrp),
         cost_price: String(v.cost_price),
         attributes: v.attributes ?? {},
         image_path: v.image_path,

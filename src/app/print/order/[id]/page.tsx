@@ -60,7 +60,11 @@ export default async function PrintOrderPage({ params }: PageProps<"/print/order
         <tbody>
           {lines.map((l) => (
             <tr key={l.id} className="border-b">
-              <td className="py-2">{l.description}{l.sku && <span className="block text-xs text-neutral-500">{l.sku}</span>}</td>
+              <td className="py-2">
+                {l.description}
+                {(l.sku || l.mrp) && <span className="block text-xs text-neutral-500">{[l.sku, l.mrp ? `MRP ₹${Number(l.mrp).toLocaleString("en-IN")}` : null].filter(Boolean).join(" · ")}</span>}
+                {l.offer_label && <span className="block text-xs text-neutral-500">{l.offer_label}</span>}
+              </td>
               <td className="py-2 text-right tabular">{formatQty(l.quantity)}</td>
               <td className="py-2 text-right"><Money value={l.unit_price} /></td>
               <td className="py-2 text-right">{l.discount_amount + l.order_discount_share > 0 ? <Money value={l.discount_amount + l.order_discount_share} /> : "—"}</td>

@@ -14,6 +14,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { saveOrderAction } from "@/lib/actions/orders";
 import { calcDocument } from "@/lib/calc/document";
+import { useCurrency } from "@/components/money";
+import { applyOffers, type Offer, type OfferItem } from "@/lib/calc/offers";
+import { ToggleRow } from "@/components/settings/business-profile-fields";
 
 export interface OrderDraftInit {
   id: string | null;
@@ -37,6 +40,7 @@ export function OrderForm({
   deductionStatus,
   customersEnabled,
   country,
+  offers,
 }: {
   init: OrderDraftInit;
   items: PickerItem[];
@@ -46,8 +50,10 @@ export function OrderForm({
   deductionStatus: string;
   customersEnabled: boolean;
   country: string;
+  offers: Offer[];
 }) {
   const router = useRouter();
+  const { format } = useCurrency();
   const [customers, setCustomers] = useState(initialCustomers);
   const [o, setO] = useState(() => ({
     ...init,
@@ -56,6 +62,18 @@ export function OrderForm({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [pending, startTransition] = useTransition();
   const set = (p: Partial<typeof o>) => setO((s) => ({ ...s, ...p }));
+  // Offers apply automatically to new orders; on existing orders you switch it on.
+  const [autoOffers, setAutoOffers] = useState(!init.id);
+  const offerItems = useMemo(
+    () => new Map<string, OfferItem>(items.filter((i) => i.product_id).map((i) => [i.variant_id, { variant_id: i.variant_id, product_id: i.product_id!, category_id: i.category_id ?? null, mrp: i.mrp ?? null, selling_price: i.selling_price }])),
+    [items],
+  );
+  const withOffers = (lines: typeof o.lines, date: string, on: boolean) => applyOffers(lines, offerItems, on ? offers : [], date);
+  const setLines = (lines: typeof o.lines) => setO((s) => ({ ...s, lines: autoOffers ? withOffers(lines, s.order_date, true) : lines }));
+  const mrpTotal = o.lines.reduce((a, l) => {
+    const it = l.variant_id ? offerItems.get(l.variant_id) : undefined;
+    return a + (it?.mrp ? Number(it.mrp) * Number(l.quantity || 0) : Number(l.unit_price || 0) * Number(l.quantity || 0));
+  }, 0);
 
   const calc = useMemo(
     () =>
@@ -97,7 +115,7 @@ export function OrderForm({
       shipping_charge: o.shipping_charge || 0,
       preferred_payment_method: o.preferred_payment_method || null,
       notes: o.notes,
-      lines: lines.map((l) => ({ variant_id: l.variant_id, quantity: l.quantity, unit_price: l.unit_price || 0, discount_amount: l.discount_amount || 0, tax_rate: l.tax_rate || 0 })),
+      lines: lines.map((l) => ({ variant_id: l.variant_id, quantity: l.quantity, unit_price: l.unit_price || 0, discount_amount: l.discount_amount || 0, tax_rate: l.tax_rate || 0, offer_id: l.offer_id ?? null, offer_label: l.offer_label ?? null })),
     };
     startTransition(async () => {
       const res = await saveOrderAction(payload);
@@ -150,7 +168,7 @@ export function OrderForm({
             </Field>
           )}
           <Field label="Order date" htmlFor="order_date" error={errors.order_date}>
-            <Input id="order_date" type="date" value={o.order_date} onChange={(e) => set({ order_date: e.target.value })} />
+            <Input id="order_date" type="date" value={o.order_date} onChange={(e) => { const d = e.target.value; setO((s) => ({ ...s, order_date: d, lines: autoOffers ? withOffers(s.lines, d, true) : s.lines })); }} />
           </Field>
           <Field label="Payment due" htmlFor="due_date" error={errors.due_date}>
             <Input id="due_date" type="date" value={o.due_date} onChange={(e) => set({ due_date: e.target.value })} />
@@ -159,7 +177,16 @@ export function OrderForm({
       </FormSection>
 
       <FormSection title="Items" description={tax.enabled ? (tax.inclusive ? `Prices include ${tax.label}.` : `${tax.label} is added on top of prices.`) : undefined}>
-        <LinesEditor mode="sale" items={items} lines={o.lines} onChange={(lines) => set({ lines })} calc={calcForRows} taxEnabled={tax.enabled} taxLabel={tax.label} errors={errors} checkStock />
+        <LinesEditor mode="sale" items={items} lines={o.lines} onChange={setLines} calc={calcForRows} taxEnabled={tax.enabled} taxLabel={tax.label} errors={errors} checkStock />
+        {offers.length > 0 && (
+          <ToggleRow
+            id="auto-offers"
+            label="Apply offers automatically"
+            description={offers.filter((x) => x.is_active).map((x) => x.name).join(", ") || "No active offers"}
+            checked={autoOffers}
+            onChange={(v) => { setAutoOffers(v); setO((s) => ({ ...s, lines: withOffers(s.lines, s.order_date, v) })); }}
+          />
+        )}
       </FormSection>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -189,6 +216,9 @@ export function OrderForm({
               { label: "Total", value: total, strong: true },
             ]}
           />
+          {mrpTotal - (calc.subtotal - calc.discount) > 0.5 && (
+            <p className="text-sm text-success">Customer saves {format(mrpTotal - (calc.subtotal - calc.discount))} on MRP ({format(mrpTotal)})</p>
+          )}
           {calc.errors.length > 0 && <p className="text-sm text-destructive">{calc.errors[0]}</p>}
           <p className="text-xs text-muted-foreground">
             Payments are recorded separately after saving. Stock is deducted and the sale recorded when the order reaches “{deductionStatus}”.

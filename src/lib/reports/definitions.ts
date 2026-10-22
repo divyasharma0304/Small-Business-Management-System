@@ -80,14 +80,14 @@ export const REPORTS: ReportDefinition[] = [
     filters: ["range", "customer", "category", "product"],
     async load(ctx, p) {
       type Line = {
-        quantity: number; net_amount: number; tax_amount: number; line_total: number; cogs_amount: number; description: string; category_id: string | null; variant_id: string;
+        quantity: number; net_amount: number; tax_amount: number; line_total: number; cogs_amount: number; description: string; category_id: string | null; variant_id: string; mrp: number | null; offer_label: string | null; unit_price: number;
         orders: { id: string; order_number: string; order_date: string; customer_id: string | null; customers: { name: string } | null };
         product_variants: { product_id: string };
       };
       const lines = await fetchAll<Line>((from, to) => {
         let q = ctx.supabase
           .from("order_items")
-          .select("quantity, net_amount, tax_amount, line_total, cogs_amount, description, category_id, variant_id, orders!inner(id, order_number, order_date, customer_id, status, recognized_at, customers(name)), product_variants!inner(product_id)")
+          .select("quantity, net_amount, tax_amount, line_total, cogs_amount, description, category_id, variant_id, mrp, offer_label, unit_price, orders!inner(id, order_number, order_date, customer_id, status, recognized_at, customers(name)), product_variants!inner(product_id)")
           .eq("business_id", ctx.businessId)
           .not("orders.recognized_at", "is", null)
           .not("orders.status", "in", "(cancelled,returned)")
@@ -112,6 +112,8 @@ export const REPORTS: ReportDefinition[] = [
         tax: n(l.tax_amount),
         cogs: n(l.cogs_amount),
         profit: n(l.net_amount) - n(l.cogs_amount),
+        mrp_value: l.mrp ? n(l.mrp) * n(l.quantity) : null,
+        offer: l.offer_label ?? "",
         _href: `/orders/${l.orders.id}`,
       }));
       const revenue = rows.reduce((a, r) => a + r.revenue, 0);
@@ -128,6 +130,8 @@ export const REPORTS: ReportDefinition[] = [
           { key: "tax", label: ctx.business.tax_label, type: "money", total: true, secondary: true },
           { key: "cogs", label: "COGS", type: "money", total: true, secondary: true },
           { key: "profit", label: "Gross profit", type: "money", total: true },
+          { key: "mrp_value", label: "MRP value", type: "money", total: true, secondary: true },
+          { key: "offer", label: "Offer", type: "text", secondary: true },
         ],
         rows,
         summary: [
@@ -135,8 +139,9 @@ export const REPORTS: ReportDefinition[] = [
           { label: "Cost of goods sold", value: cogs, type: "money" },
           { label: "Gross profit", value: revenue - cogs, type: "money" },
           { label: "Orders", value: new Set(lines.map((l) => l.orders.id)).size, type: "number" },
+          { label: "Discount given vs MRP", value: lines.filter((l) => l.mrp).reduce((a, l) => a + n(l.mrp) * n(l.quantity) - n(l.unit_price) * n(l.quantity), 0), type: "money" },
         ],
-        note: "Line revenue excludes tax and is after line and order discounts. Shipping charges are order-level and appear in the Profit & loss and Orders reports, not here.",
+        note: "Discount vs MRP covers lines sold after MRPs were added. Line revenue excludes tax and is after line and order discounts. Shipping charges are order-level and appear in the Profit & loss and Orders reports, not here.",
       };
     },
   },
