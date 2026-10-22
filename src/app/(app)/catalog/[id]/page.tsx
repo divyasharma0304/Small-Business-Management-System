@@ -71,7 +71,7 @@ export default async function ProductPage({ params }: PageProps<"/catalog/[id]">
       />
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <div className="grid gap-6 lg:col-span-2">
+        <div className="grid min-w-0 grid-cols-1 gap-6 lg:col-span-2">
           <Card>
             <CardHeader><CardTitle>{product.has_variants ? "Variants" : "Pricing & stock"}</CardTitle></CardHeader>
             <CardContent className="overflow-x-auto px-0">

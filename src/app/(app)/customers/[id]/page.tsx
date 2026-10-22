@@ -64,7 +64,7 @@ export default async function CustomerPage({ params }: PageProps<"/customers/[id
         <StatCard label="Pending payment" value={money(due)} tone={due > 0 ? "danger" : "default"} />
       </div>
       <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2">
+        <div className="min-w-0 lg:col-span-2">
           <h2 className="mb-3 text-base font-semibold">Order history</h2>
           {orders.length === 0 ? (
             <EmptyState icon={Receipt} title="No orders yet" action={<Button asChild><Link href={`/orders/new?customer=${c.id}`}><Plus /> Create order</Link></Button>} />

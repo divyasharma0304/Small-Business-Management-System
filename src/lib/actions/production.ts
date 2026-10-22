@@ -45,8 +45,10 @@ export async function setRecipeActiveAction(id: string, active: boolean): Promis
 }
 
 const batchSchema = z.object({
-  recipe_id: uuid,
-  planned_quantity: quantity("Planned quantity"),
+  outputs: z
+    .array(z.object({ recipe_id: uuid, planned_quantity: quantity("Planned quantity") }))
+    .min(1, "Add at least one product")
+    .max(50),
   production_date: isoDate(),
   notes: optionalText(2000),
 });
@@ -56,10 +58,9 @@ export async function createBatchAction(input: unknown): Promise<ActionResult<{ 
   const parsed = batchSchema.safeParse(input);
   if (!parsed.success) return fail("Please fix the highlighted fields.", zodFieldErrors(parsed.error.issues));
   const d = parsed.data;
-  const { data, error } = await ctx.supabase.rpc("create_production_batch", {
+  const { data, error } = await ctx.supabase.rpc("create_production_batch_multi", {
     p_business: ctx.businessId,
-    p_recipe: d.recipe_id,
-    p_planned_quantity: d.planned_quantity,
+    p_outputs: d.outputs,
     p_date: d.production_date,
     p_notes: d.notes,
     p_is_demo: false,
@@ -78,7 +79,7 @@ export async function setBatchStatusAction(id: string, status: ProductionStatus)
 }
 
 const completeSchema = z.object({
-  actual_quantity: quantity("Quantity produced"),
+  outputs: z.array(z.object({ id: uuid, actual_quantity: quantity("Quantity produced") })).min(1),
   additional_cost: money("Additional cost").default(0),
   notes: optionalText(2000),
   lines: z.array(z.object({ id: uuid, used_quantity: nonNegativeQty("Used"), wasted_quantity: nonNegativeQty("Wasted") })),
@@ -89,9 +90,9 @@ export async function completeBatchAction(id: string, input: unknown): Promise<A
   const parsed = completeSchema.safeParse(input);
   if (!parsed.success) return fail("Please fix the highlighted fields.", zodFieldErrors(parsed.error.issues));
   const d = parsed.data;
-  const { error } = await ctx.supabase.rpc("complete_production_batch", {
+  const { error } = await ctx.supabase.rpc("complete_production_batch_multi", {
     p_batch: id,
-    p_actual_quantity: d.actual_quantity,
+    p_outputs: d.outputs,
     p_lines: d.lines,
     p_additional_cost: d.additional_cost,
     p_notes: d.notes,

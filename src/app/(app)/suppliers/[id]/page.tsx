@@ -71,7 +71,7 @@ export default async function SupplierPage({ params }: PageProps<"/suppliers/[id
         <StatCard label="Outstanding (you owe)" value={money(due)} tone={due > 0 ? "warning" : "default"} />
       </div>
       <div className="grid gap-6 lg:grid-cols-3">
-        <div className="grid content-start gap-6 lg:col-span-2">
+        <div className="grid min-w-0 grid-cols-1 content-start gap-6 lg:col-span-2">
           <div>
             <h2 className="mb-3 text-base font-semibold">Purchase history</h2>
             {purchases.length === 0 ? (

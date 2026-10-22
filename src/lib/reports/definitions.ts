@@ -397,25 +397,41 @@ export const REPORTS: ReportDefinition[] = [
     module: "module_production",
     filters: ["range", "batchStatus"],
     async load(ctx, p) {
-      type B = { id: string; batch_number: string; production_date: string; status: string; planned_quantity: number; actual_quantity: number | null; material_cost: number; wastage_cost: number; additional_cost: number; total_cost: number; unit_cost: number | null; product_variants: { name: string; is_default: boolean; products: { name: string; unit: string } } };
-      const list = await fetchAll<B>((from, to) => {
-        let q = ctx.supabase.from("production_batches").select("*, product_variants!inner(name, is_default, products!inner(name, unit))").eq("business_id", ctx.businessId).gte("production_date", p.from).lte("production_date", p.to);
-        if (p.status) q = q.eq("status", p.status);
-        return q.order("production_date", { ascending: false }).range(from, to) as unknown as PromiseLike<{ data: B[] | null; error: unknown }>;
+      // One row per product made (a batch can make several products)
+      type O = {
+        planned_quantity: number; actual_quantity: number | null; material_cost: number; wastage_cost: number; additional_cost: number; total_cost: number; unit_cost: number | null;
+        production_batches: { id: string; batch_number: string; production_date: string; status: string };
+        product_variants: { name: string; is_default: boolean; products: { name: string; unit: string } };
+      };
+      const list = await fetchAll<O>((from, to) => {
+        let q = ctx.supabase
+          .from("production_batch_outputs")
+          .select("*, production_batches!inner(id, batch_number, production_date, status), product_variants!inner(name, is_default, products!inner(name, unit))")
+          .eq("business_id", ctx.businessId)
+          .gte("production_batches.production_date", p.from)
+          .lte("production_batches.production_date", p.to);
+        if (p.status) q = q.eq("production_batches.status", p.status);
+        return q.order("created_at", { ascending: false }).range(from, to) as unknown as PromiseLike<{ data: O[] | null; error: unknown }>;
       });
-      const done = list.filter((b) => b.status === "completed");
+      list.sort((a, b) => (a.production_batches.production_date < b.production_batches.production_date ? 1 : -1));
+      const done = list.filter((o) => o.production_batches.status === "completed");
       return {
         columns: [
           { key: "date", label: "Date", type: "date" }, { key: "batch", label: "Batch", type: "text" }, { key: "product", label: "Product", type: "text" }, { key: "status", label: "Status", type: "status" },
           { key: "planned", label: "Planned", type: "qty", secondary: true }, { key: "produced", label: "Produced", type: "qty", total: true },
           { key: "materials", label: "Materials", type: "money", total: true, secondary: true }, { key: "wastage", label: "Wastage", type: "money", total: true, secondary: true },
+          { key: "extra", label: "Additional", type: "money", total: true, secondary: true },
           { key: "total", label: "Total cost", type: "money", total: true }, { key: "unit", label: "Unit cost", type: "money" },
         ],
-        rows: list.map((b) => ({ date: b.production_date, batch: b.batch_number, product: vName({ ...b.product_variants, products: b.product_variants.products }), status: b.status, planned: n(b.planned_quantity), produced: b.actual_quantity == null ? null : n(b.actual_quantity), materials: n(b.material_cost), wastage: n(b.wastage_cost), total: n(b.total_cost), unit: b.unit_cost == null ? null : n(b.unit_cost), _href: `/production/batches/${b.id}` })),
+        rows: list.map((o) => ({
+          date: o.production_batches.production_date, batch: o.production_batches.batch_number, product: vName(o.product_variants), status: o.production_batches.status,
+          planned: n(o.planned_quantity), produced: o.actual_quantity == null ? null : n(o.actual_quantity), materials: n(o.material_cost), wastage: n(o.wastage_cost),
+          extra: n(o.additional_cost), total: n(o.total_cost), unit: o.unit_cost == null ? null : n(o.unit_cost), _href: `/production/batches/${o.production_batches.id}`,
+        })),
         summary: [
-          { label: "Completed batches", value: done.length, type: "number" },
-          { label: "Production cost", value: done.reduce((a, b) => a + n(b.total_cost), 0), type: "money", emphasis: true },
-          { label: "Wastage cost", value: done.reduce((a, b) => a + n(b.wastage_cost), 0), type: "money" },
+          { label: "Completed batches", value: new Set(done.map((o) => o.production_batches.id)).size, type: "number" },
+          { label: "Production cost", value: done.reduce((a, o) => a + n(o.total_cost), 0), type: "money", emphasis: true },
+          { label: "Wastage cost", value: done.reduce((a, o) => a + n(o.wastage_cost), 0), type: "money" },
         ],
       };
     },

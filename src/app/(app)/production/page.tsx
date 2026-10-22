@@ -29,7 +29,7 @@ export default async function ProductionPage({ searchParams }: PageProps<"/produ
 
   let q = ctx.supabase
     .from("production_batches")
-    .select("*, product_variants!inner(name, is_default, products!inner(name, unit)), recipes(name)", { count: "exact" })
+    .select("*, production_batch_outputs(planned_quantity, actual_quantity, sort_order, product_variants!inner(name, is_default, products!inner(name, unit)))", { count: "exact" })
     .eq("business_id", ctx.businessId);
   const status = lp.get("status");
   if (status) q = q.eq("status", status);
@@ -40,8 +40,12 @@ export default async function ProductionPage({ searchParams }: PageProps<"/produ
     loadRecipeOptions(ctx),
   ]);
   const rows = (data ?? []) as (ProductionBatch & {
-    product_variants: { name: string; is_default: boolean; products: { name: string; unit: string } };
-    recipes: { name: string } | null;
+    production_batch_outputs: {
+      planned_quantity: number;
+      actual_quantity: number | null;
+      sort_order: number;
+      product_variants: { name: string; is_default: boolean; products: { name: string; unit: string } };
+    }[];
   })[];
   const today = todayIn(ctx.business.timezone);
 
@@ -68,16 +72,14 @@ export default async function ProductionPage({ searchParams }: PageProps<"/produ
                 <TableRow>
                   <TableHead>Batch</TableHead>
                   <TableHead className="hidden sm:table-cell">Date</TableHead>
-                  <TableHead>Product</TableHead>
-                  <TableHead className="text-right">Planned</TableHead>
-                  <TableHead className="text-right">Produced</TableHead>
-                  <TableHead className="hidden text-right md:table-cell">Unit cost</TableHead>
+                  <TableHead>Products</TableHead>
+                  <TableHead className="hidden text-right md:table-cell">Total cost</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {rows.map((b) => {
-                  const unit = b.product_variants.products.unit;
+                  const outs = [...b.production_batch_outputs].sort((x, y) => x.sort_order - y.sort_order);
                   return (
                     <TableRow key={b.id} className="relative">
                       <TableCell>
@@ -85,10 +87,20 @@ export default async function ProductionPage({ searchParams }: PageProps<"/produ
                         {b.is_demo && <DemoBadge />}
                       </TableCell>
                       <TableCell className="hidden whitespace-nowrap sm:table-cell">{formatDate(b.production_date)}</TableCell>
-                      <TableCell>{b.product_variants.is_default ? b.product_variants.products.name : `${b.product_variants.products.name} — ${b.product_variants.name}`}</TableCell>
-                      <TableCell className="text-right tabular">{formatQty(b.planned_quantity, unit)}</TableCell>
-                      <TableCell className="text-right tabular">{b.actual_quantity == null ? "—" : formatQty(b.actual_quantity, unit)}</TableCell>
-                      <TableCell className="hidden text-right md:table-cell">{b.unit_cost == null ? "—" : <Money value={b.unit_cost} />}</TableCell>
+                      <TableCell>
+                        <ul className="grid gap-0.5">
+                          {outs.map((o, i) => {
+                            const name = o.product_variants.is_default ? o.product_variants.products.name : `${o.product_variants.products.name} — ${o.product_variants.name}`;
+                            const unit = o.product_variants.products.unit;
+                            return (
+                              <li key={i} className="text-sm">
+                                {name} <span className="text-muted-foreground tabular">× {formatQty(o.actual_quantity ?? o.planned_quantity, unit)}{o.actual_quantity == null ? " planned" : ""}</span>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </TableCell>
+                      <TableCell className="hidden text-right md:table-cell">{b.status === "completed" ? <Money value={b.total_cost} /> : "—"}</TableCell>
                       <TableCell><StatusBadge status={b.status} /></TableCell>
                     </TableRow>
                   );

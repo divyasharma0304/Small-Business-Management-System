@@ -607,3 +607,38 @@ describe("reversals keep stock value correct", () => {
     expect(await avgOf()).toBeCloseTo(before, 3);
   });
 });
+
+describe("multi-product production batches", () => {
+  const U3 = "88888888-8888-4888-8888-888888888888";
+  it("makes two products in one batch, each at its own cost, and splits extra cost", async () => {
+    await createUser(db, U3);
+    const b = await rpc<string>(db, U3, "create_business", [{ name: "Multi Co", modules: { production: true } }]);
+    const vOf = async (p: string) =>
+      (await asUser(db, U3, async (tx) => (await tx.query<{ id: string }>("select id from product_variants where product_id = $1", [p])).rows[0])).id;
+    const lvl = async (v: string) =>
+      (await asUser(db, U3, async (tx) => (await tx.query<{ quantity: string; avg_cost: string }>("select quantity, avg_cost from inventory_levels where variant_id = $1", [v])).rows[0]));
+    const wax = await vOf(await rpc<string>(db, U3, "save_product", [b, { name: "Wax", item_type: "material", unit: "g", track_inventory: true }, [{ opening_stock: 5000, opening_unit_cost: 0.24 }], []]));
+    const jar = await vOf(await rpc<string>(db, U3, "save_product", [b, { name: "Jar", item_type: "material", track_inventory: true }, [{ opening_stock: 50, opening_unit_cost: 20 }], []]));
+    const small = await vOf(await rpc<string>(db, U3, "save_product", [b, { name: "Small candle", track_inventory: true }, [{ selling_price: 200 }], []]));
+    const big = await vOf(await rpc<string>(db, U3, "save_product", [b, { name: "Big candle", track_inventory: true }, [{ selling_price: 400 }], []]));
+    const rs = await rpc<string>(db, U3, "save_recipe", [b, { name: "Small", variant_id: small, yield_quantity: 1 }, [{ component_variant_id: wax, quantity: 50 }, { component_variant_id: jar, quantity: 1 }]]);
+    const rb = await rpc<string>(db, U3, "save_recipe", [b, { name: "Big", variant_id: big, yield_quantity: 1 }, [{ component_variant_id: wax, quantity: 200 }, { component_variant_id: jar, quantity: 1 }]]);
+
+    const batch = await rpc<string>(db, U3, "create_production_batch_multi", [b, [{ recipe_id: rs, planned_quantity: 10 }, { recipe_id: rb, planned_quantity: 5 }], "2026-10-23", null, false]);
+    const outs = await asUser(db, U3, async (tx) => (await tx.query<{ id: string; variant_id: string }>("select id, variant_id from production_batch_outputs where batch_id = $1 order by sort_order", [batch])).rows);
+    expect(outs).toHaveLength(2);
+
+    // small: 10×(50g×0.24 + 20) = 320 ; big: 5×(200g×0.24 + 20) = 340 ; extra ₹66 split 320:340 → 32 / 34
+    await rpc(db, U3, "complete_production_batch_multi", [batch, [{ id: outs[0].id, actual_quantity: 10 }, { id: outs[1].id, actual_quantity: 5 }], null, 66, null]);
+    expect(num((await lvl(small)).quantity)).toBe(10);
+    expect(num((await lvl(small)).avg_cost)).toBe(35.2); // (320 + 32) / 10
+    expect(num((await lvl(big)).quantity)).toBe(5);
+    expect(num((await lvl(big)).avg_cost)).toBe(74.8);   // (340 + 34) / 5
+    expect(num((await lvl(wax)).quantity)).toBe(5000 - 500 - 1000);
+    expect(num((await lvl(jar)).quantity)).toBe(35);
+
+    await rpc(db, U3, "delete_production_batch", [batch]);
+    expect(num((await lvl(wax)).quantity)).toBe(5000);
+    expect(num((await lvl(small)).quantity)).toBe(0);
+  });
+});

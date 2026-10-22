@@ -326,26 +326,38 @@ export interface RecipeItem {
 export interface ProductionBatch {
   id: string;
   batch_number: string;
-  recipe_id: string | null;
-  variant_id: string;
-  planned_quantity: number;
-  actual_quantity: number | null;
   production_date: string;
   status: ProductionStatus;
   material_cost: number;
   wastage_cost: number;
   additional_cost: number;
   total_cost: number;
-  unit_cost: number | null;
   completed_at: string | null;
   notes: string | null;
   is_demo: boolean;
   created_at: string;
 }
 
+/** One product made in a batch (a batch can make several). */
+export interface ProductionBatchOutput {
+  id: string;
+  batch_id: string;
+  recipe_id: string | null;
+  variant_id: string;
+  planned_quantity: number;
+  actual_quantity: number | null;
+  material_cost: number;
+  wastage_cost: number;
+  additional_cost: number;
+  total_cost: number;
+  unit_cost: number | null;
+  sort_order: number;
+}
+
 export interface ProductionConsumption {
   id: string;
   batch_id: string;
+  output_id: string;
   component_variant_id: string;
   planned_quantity: number;
   used_quantity: number;

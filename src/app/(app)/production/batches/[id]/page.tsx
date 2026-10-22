@@ -15,36 +15,50 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { deleteBatchAction, setBatchStatusAction } from "@/lib/actions/production";
 import { requireContext } from "@/lib/context";
 import { formatDate, formatDateTime, formatQty } from "@/lib/format";
-import type { ProductionBatch, ProductionConsumption } from "@/lib/types";
+import type { ProductionBatch, ProductionBatchOutput, ProductionConsumption } from "@/lib/types";
 
 export const metadata: Metadata = { title: "Production batch" };
 
 type VariantJoin = { name: string; is_default: boolean; products: { name: string; unit: string } };
 const nameOf = (v: VariantJoin) => (v.is_default ? v.products.name : `${v.products.name} — ${v.name}`);
+const VJ = "product_variants!inner(name, is_default, products!inner(name, unit))";
 
 export default async function BatchPage({ params }: PageProps<"/production/batches/[id]">) {
   const { id } = await params;
   const ctx = await requireContext();
-  const { data } = await ctx.supabase
-    .from("production_batches")
-    .select("*, product_variants!inner(name, is_default, products!inner(name, unit)), recipes(id, name)")
-    .eq("id", id)
-    .eq("business_id", ctx.businessId)
-    .maybeSingle();
+  const { data } = await ctx.supabase.from("production_batches").select("*").eq("id", id).eq("business_id", ctx.businessId).maybeSingle();
   if (!data) notFound();
-  const batch = data as ProductionBatch & { product_variants: VariantJoin; recipes: { id: string; name: string } | null };
+  const batch = data as ProductionBatch;
 
-  const [{ data: consRows }, { data: txns }] = await Promise.all([
-    ctx.supabase.from("production_consumption").select("*, product_variants!inner(name, is_default, products!inner(name, unit))").eq("batch_id", id).order("sort_order"),
-    ctx.supabase.from("inventory_transactions").select("*, product_variants!inner(name, is_default, products!inner(name, unit))").eq("reference_id", id).eq("reference_type", "production_batch").order("created_at"),
+  const [{ data: outRows }, { data: consRows }, { data: txns }] = await Promise.all([
+    ctx.supabase.from("production_batch_outputs").select(`*, ${VJ}, recipes(name)`).eq("batch_id", id).order("sort_order"),
+    ctx.supabase.from("production_consumption").select(`*, ${VJ}`).eq("batch_id", id).order("sort_order"),
+    ctx.supabase.from("inventory_transactions").select(`*, ${VJ}`).eq("reference_id", id).eq("reference_type", "production_batch").order("created_at"),
   ]);
+  const outputs = (outRows ?? []) as (ProductionBatchOutput & { product_variants: VariantJoin; recipes: { name: string } | null })[];
   const cons = (consRows ?? []) as (ProductionConsumption & { product_variants: VariantJoin })[];
   const { data: levels } = cons.length
     ? await ctx.supabase.from("inventory_levels").select("variant_id, quantity, avg_cost").in("variant_id", cons.map((c) => c.component_variant_id))
     : { data: [] };
   const levelOf = new Map((levels ?? []).map((l) => [l.variant_id, l]));
-  const unit = batch.product_variants.products.unit;
   const open = batch.status === "planned" || batch.status === "in_progress";
+  const completed = batch.status === "completed";
+
+  // Combined material needs across all products (the same material can be in several recipes)
+  const totals = new Map<string, { name: string; unit: string; qty: number; available: number; cost: number }>();
+  for (const c of cons) {
+    const t = totals.get(c.component_variant_id) ?? {
+      name: nameOf(c.product_variants),
+      unit: c.product_variants.products.unit,
+      qty: 0,
+      available: Number(levelOf.get(c.component_variant_id)?.quantity ?? 0),
+      cost: 0,
+    };
+    t.qty += Number(c.used_quantity) + Number(c.wasted_quantity);
+    t.cost += Number(c.total_cost);
+    totals.set(c.component_variant_id, t);
+  }
+  const productsLabel = outputs.map((o) => `${formatQty(o.actual_quantity ?? o.planned_quantity, o.product_variants.products.unit)} × ${nameOf(o.product_variants)}`).join(", ");
 
   return (
     <>
@@ -52,16 +66,16 @@ export default async function BatchPage({ params }: PageProps<"/production/batch
         title={batch.batch_number}
         back={{ href: "/production", label: "Production" }}
         badge={<><StatusBadge status={batch.status} />{batch.is_demo && <DemoBadge />}</>}
-        description={`${formatDate(batch.production_date)} · ${formatQty(batch.planned_quantity, unit)} × ${nameOf(batch.product_variants)}${batch.recipes ? ` · Recipe: ${batch.recipes.name}` : ""}`}
+        description={`${formatDate(batch.production_date)} · ${productsLabel}`}
         actions={
-          batch.status === "completed" ? (
+          completed ? (
             <ConfirmAction
               trigger={<Button variant="ghost"><Trash2 /> Delete</Button>}
               title="Delete this completed batch?"
               description={
                 <ul className="list-disc space-y-1 pl-5">
                   <li>The materials it used (and wasted) go back into stock.</li>
-                  <li>The {formatQty(batch.actual_quantity, unit)} it produced are removed from stock. If some were already sold or used, the delete stops and nothing changes.</li>
+                  <li>The products it made are removed from stock. If some were already sold or used, the delete stops and nothing changes.</li>
                   <li>This can&apos;t be undone.</li>
                 </ul>
               }
@@ -79,17 +93,21 @@ export default async function BatchPage({ params }: PageProps<"/production/batch
               )}
               <CompleteBatchDialog
                 batchId={batch.id}
-                plannedQuantity={Number(batch.planned_quantity)}
-                unit={unit}
-                lines={cons.map((c) => ({
-                  id: c.id,
-                  name: nameOf(c.product_variants),
-                  unit: c.product_variants.products.unit,
-                  planned_quantity: Number(c.planned_quantity),
-                  used_quantity: Number(c.used_quantity),
-                  wasted_quantity: Number(c.wasted_quantity),
-                  available: Number(levelOf.get(c.component_variant_id)?.quantity ?? 0),
-                  avg_cost: Number(levelOf.get(c.component_variant_id)?.avg_cost ?? 0),
+                outputs={outputs.map((o) => ({
+                  id: o.id,
+                  name: nameOf(o.product_variants),
+                  unit: o.product_variants.products.unit,
+                  planned_quantity: Number(o.planned_quantity),
+                  lines: cons.filter((c) => c.output_id === o.id).map((c) => ({
+                    id: c.id,
+                    name: nameOf(c.product_variants),
+                    unit: c.product_variants.products.unit,
+                    planned_quantity: Number(c.planned_quantity),
+                    used_quantity: Number(c.used_quantity),
+                    wasted_quantity: Number(c.wasted_quantity),
+                    available: Number(levelOf.get(c.component_variant_id)?.quantity ?? 0),
+                    avg_cost: Number(levelOf.get(c.component_variant_id)?.avg_cost ?? 0),
+                  })),
                 }))}
               />
             </>
@@ -97,36 +115,33 @@ export default async function BatchPage({ params }: PageProps<"/production/batch
         }
       />
       <div className="grid gap-6 lg:grid-cols-3">
-        <div className="grid content-start gap-6 lg:col-span-2">
+        <div className="grid min-w-0 grid-cols-1 content-start gap-6 lg:col-span-2">
           <Card>
-            <CardHeader><CardTitle>Materials</CardTitle></CardHeader>
+            <CardHeader><CardTitle>Products</CardTitle></CardHeader>
             <CardContent className="overflow-x-auto px-0">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="pl-6">Material</TableHead>
+                    <TableHead className="pl-6">Product</TableHead>
                     <TableHead className="text-right">Planned</TableHead>
-                    <TableHead className="text-right">{open ? "Expected use" : "Used"}</TableHead>
-                    <TableHead className="text-right">{open ? "Expected waste" : "Wasted"}</TableHead>
-                    {open ? <TableHead className="pr-6 text-right">In stock</TableHead> : <TableHead className="pr-6 text-right">Cost</TableHead>}
+                    <TableHead className="text-right">Made</TableHead>
+                    {completed && <TableHead className="text-right">Total cost</TableHead>}
+                    {completed && <TableHead className="pr-6 text-right">Per unit</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {cons.map((c) => {
-                    const u = c.product_variants.products.unit;
-                    const avail = Number(levelOf.get(c.component_variant_id)?.quantity ?? 0);
-                    const short = open && Number(c.used_quantity) + Number(c.wasted_quantity) > avail;
+                  {outputs.map((o) => {
+                    const u = o.product_variants.products.unit;
                     return (
-                      <TableRow key={c.id}>
-                        <TableCell className="pl-6"><Link href={`/inventory/${c.component_variant_id}`} className="hover:underline">{nameOf(c.product_variants)}</Link></TableCell>
-                        <TableCell className="text-right tabular">{formatQty(c.planned_quantity, u)}</TableCell>
-                        <TableCell className="text-right tabular">{formatQty(c.used_quantity, u)}</TableCell>
-                        <TableCell className="text-right tabular">{formatQty(c.wasted_quantity, u)}</TableCell>
-                        {open ? (
-                          <TableCell className={`pr-6 text-right tabular ${short ? "font-medium text-destructive" : ""}`}>{formatQty(avail, u)}</TableCell>
-                        ) : (
-                          <TableCell className="pr-6 text-right"><Money value={c.total_cost} /></TableCell>
-                        )}
+                      <TableRow key={o.id}>
+                        <TableCell className="pl-6">
+                          <Link href={`/inventory/${o.variant_id}`} className="font-medium hover:underline">{nameOf(o.product_variants)}</Link>
+                          {o.recipes && <div className="text-xs text-muted-foreground">Recipe: {o.recipes.name}</div>}
+                        </TableCell>
+                        <TableCell className="text-right tabular">{formatQty(o.planned_quantity, u)}</TableCell>
+                        <TableCell className="text-right tabular">{o.actual_quantity == null ? "—" : formatQty(o.actual_quantity, u)}</TableCell>
+                        {completed && <TableCell className="text-right"><Money value={o.total_cost} /></TableCell>}
+                        {completed && <TableCell className="pr-6 text-right"><Money value={o.unit_cost} /></TableCell>}
                       </TableRow>
                     );
                   })}
@@ -134,6 +149,35 @@ export default async function BatchPage({ params }: PageProps<"/production/batch
               </Table>
             </CardContent>
           </Card>
+
+          <Card>
+            <CardHeader><CardTitle>Materials{outputs.length > 1 ? " (all products together)" : ""}</CardTitle></CardHeader>
+            <CardContent className="overflow-x-auto px-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="pl-6">Material</TableHead>
+                    <TableHead className="text-right">{open ? "Needed" : "Used + wasted"}</TableHead>
+                    {open ? <TableHead className="pr-6 text-right">In stock</TableHead> : <TableHead className="pr-6 text-right">Cost</TableHead>}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {[...totals.entries()].map(([vid, t]) => (
+                    <TableRow key={vid}>
+                      <TableCell className="pl-6"><Link href={`/inventory/${vid}`} className="hover:underline">{t.name}</Link></TableCell>
+                      <TableCell className="text-right tabular">{formatQty(t.qty, t.unit)}</TableCell>
+                      {open ? (
+                        <TableCell className={`pr-6 text-right tabular ${t.qty > t.available ? "font-medium text-destructive" : ""}`}>{formatQty(t.available, t.unit)}</TableCell>
+                      ) : (
+                        <TableCell className="pr-6 text-right"><Money value={t.cost} /></TableCell>
+                      )}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
           {(txns ?? []).length > 0 && (
             <div>
               <h2 className="mb-3 text-base font-semibold">Stock movements</h2>
@@ -148,7 +192,7 @@ export default async function BatchPage({ params }: PageProps<"/production/batch
         <Card className="content-start">
           <CardHeader><CardTitle>Batch cost</CardTitle></CardHeader>
           <CardContent>
-            {batch.status === "completed" ? (
+            {completed ? (
               <>
                 <TotalsPanel
                   rows={[
@@ -158,11 +202,10 @@ export default async function BatchPage({ params }: PageProps<"/production/batch
                     { label: "Total cost", value: batch.total_cost, strong: true },
                   ]}
                 />
-                <dl className="mt-4 grid gap-1.5 text-sm">
-                  <div className="flex justify-between"><dt className="text-muted-foreground">Produced</dt><dd className="tabular">{formatQty(batch.actual_quantity, unit)}</dd></div>
-                  <div className="flex justify-between"><dt className="text-muted-foreground">Cost per unit</dt><dd><Money value={batch.unit_cost} /></dd></div>
-                </dl>
-                <p className="mt-3 text-xs text-muted-foreground">Completed {formatDateTime(batch.completed_at, ctx.business.timezone)}. Finished goods entered stock at the cost per unit above.</p>
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Completed {formatDateTime(batch.completed_at, ctx.business.timezone)}. Each product entered stock at its own cost per unit
+                  {outputs.length > 1 ? "; the additional cost was split by each product's material cost" : ""}.
+                </p>
               </>
             ) : (
               <p className="text-sm text-muted-foreground">{batch.status === "cancelled" ? "This batch was cancelled; stock was not changed." : "Costs are calculated when the batch is completed."}</p>

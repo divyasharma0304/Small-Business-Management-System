@@ -92,7 +92,7 @@ export default async function OrderPage({ params }: PageProps<"/orders/[id]">) {
       />
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <div className="grid content-start gap-6 lg:col-span-2">
+        <div className="grid min-w-0 grid-cols-1 content-start gap-6 lg:col-span-2">
           <Card>
             <CardHeader><CardTitle>Items</CardTitle></CardHeader>
             <CardContent className="overflow-x-auto px-0">
