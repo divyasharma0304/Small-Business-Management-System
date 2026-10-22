@@ -11,7 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { recordPaymentAction } from "@/lib/actions/payments";
+import { recordPaymentAction, updatePaymentAction } from "@/lib/actions/payments";
+import type { Payment } from "@/lib/types";
 
 /**
  * Records a payment (or refund). When linked to an order/purchase, the maximum is
@@ -30,6 +31,7 @@ export function PaymentDialog({
   parties,
   title,
   description,
+  editing,
 }: {
   trigger: ReactNode;
   direction: "in" | "out";
@@ -44,6 +46,8 @@ export function PaymentDialog({
   parties?: { id: string; name: string }[];
   title?: string;
   description?: string;
+  /** When set, the dialog corrects this existing payment instead of recording a new one. */
+  editing?: Payment;
 }) {
   const router = useRouter();
   const { format, symbol } = useCurrency();
@@ -57,18 +61,42 @@ export function PaymentDialog({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [pending, startTransition] = useTransition();
 
+  const methodOptions = editing && !methods.includes(editing.method) ? [...methods, editing.method] : methods;
+
   function reset() {
+    setErrors({});
+    if (editing) {
+      setAmount(String(editing.amount));
+      setReference(editing.reference ?? "");
+      setNotes(editing.notes ?? "");
+      setDate(editing.payment_date);
+      setMethod(editing.method);
+      return;
+    }
     setAmount(suggestedAmount && suggestedAmount > 0 ? String(suggestedAmount) : "");
     setReference("");
     setNotes("");
-    setErrors({});
     setDate(today);
   }
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
     startTransition(async () => {
-      const res = await recordPaymentAction({
+      const res = editing
+        ? await updatePaymentAction(editing.id, {
+            direction: editing.direction,
+            kind: editing.kind,
+            payment_date: date,
+            amount,
+            method,
+            reference,
+            notes,
+            order_id: editing.order_id,
+            purchase_id: editing.purchase_id,
+            customer_id: editing.customer_id,
+            supplier_id: editing.supplier_id,
+          })
+        : await recordPaymentAction({
         direction,
         kind,
         payment_date: date,
@@ -92,7 +120,7 @@ export function PaymentDialog({
     });
   }
 
-  const heading = title ?? (kind === "refund" ? "Record refund" : direction === "in" ? "Record payment received" : "Record payment made");
+  const heading = editing ? `Edit ${editing.kind === "refund" ? "refund" : "payment"}` : title ?? (kind === "refund" ? "Record refund" : direction === "in" ? "Record payment received" : "Record payment made");
 
   return (
     <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o) reset(); }}>
@@ -101,11 +129,11 @@ export function PaymentDialog({
         <DialogHeader>
           <DialogTitle>{heading}</DialogTitle>
           <DialogDescription>
-            {description ?? (suggestedAmount !== undefined ? `${kind === "refund" ? "Refundable" : "Amount due"}: ${format(suggestedAmount)}` : "Not linked to a specific order or purchase.")}
+            {editing ? "Correct the details. The order or purchase balance is recalculated." : description ?? (suggestedAmount !== undefined ? `${kind === "refund" ? "Refundable" : "Amount due"}: ${format(suggestedAmount)}` : "Not linked to a specific order or purchase.")}
           </DialogDescription>
         </DialogHeader>
         <form id="payment-form" onSubmit={submit} className="grid gap-4 sm:grid-cols-2" noValidate>
-          {parties && (
+          {parties && !editing && (
             <Field label={direction === "in" ? "Customer" : "Supplier"} htmlFor="pay-party" className="sm:col-span-2">
               <SimpleSelect id="pay-party" value={party} allowNone noneLabel="None" onChange={(v) => setParty(v === "none" ? null : v)} options={parties.map((p) => ({ value: p.id, label: p.name }))} />
             </Field>
@@ -117,7 +145,7 @@ export function PaymentDialog({
             <Input id="pay-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </Field>
           <Field label="Method" htmlFor="pay-method" error={errors.method}>
-            <SimpleSelect id="pay-method" value={method || undefined} onChange={setMethod} options={methods.map((m) => ({ value: m, label: m }))} placeholder="Choose method" />
+            <SimpleSelect id="pay-method" value={method || undefined} onChange={setMethod} options={methodOptions.map((m) => ({ value: m, label: m }))} placeholder="Choose method" />
           </Field>
           <Field label="Reference" htmlFor="pay-ref" hint="UPI ref, cheque no., transaction ID…">
             <Input id="pay-ref" value={reference} onChange={(e) => setReference(e.target.value)} />

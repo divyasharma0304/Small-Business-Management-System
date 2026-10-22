@@ -51,9 +51,15 @@ export default async function SupplierPage({ params }: PageProps<"/suppliers/[id
         badge={<>{!s.is_active && <StatusBadge status="inactive" />}{s.is_demo && <DemoBadge />}</>}
         actions={
           <>
-            {purchases.length === 0 && (
-              <ConfirmAction trigger={<Button variant="ghost"><Trash2 /> Delete</Button>} title={`Delete ${s.name}?`} description="This permanently removes the supplier." confirmLabel="Delete" destructive action={deleteSupplierAction.bind(null, s.id)} redirectTo="/suppliers" />
-            )}
+            <ConfirmAction
+              trigger={<Button variant="ghost"><Trash2 /> Delete</Button>}
+              title={`Delete ${s.name}?`}
+              description={purchases.length > 0 ? `The supplier is removed. Their ${purchases.length} purchase(s) and payments are kept, shown without a supplier. To just hide them, edit and mark inactive instead.` : "This permanently removes the supplier."}
+              confirmLabel="Delete"
+              destructive
+              action={deleteSupplierAction.bind(null, s.id)}
+              redirectTo="/suppliers"
+            />
             <PartyDialog kind="supplier" initial={s} taxLabel={ctx.business.tax_label} trigger={<Button variant="outline"><Pencil /> Edit</Button>} />
             {ctx.settings.module_purchases && <Button asChild><Link href={`/purchases/new?supplier=${s.id}`}><Plus /> New purchase</Link></Button>}
           </>

@@ -42,20 +42,16 @@ async function save(kind: Kind, input: unknown): Promise<ActionResult<{ id: stri
   return ok({ id: res.data.id as string }, id ? "Saved" : `${kind === "supplier" ? "Supplier" : "Customer"} added`);
 }
 
+/** Deletes the customer/supplier. Their orders/purchases are kept (as walk-in / no supplier). */
 async function remove(kind: Kind, id: string): Promise<ActionResult> {
   const ctx = await requireContext();
   const table = TABLE[kind];
-  const { error } = await ctx.supabase.from(table).delete().eq("id", id).eq("business_id", ctx.businessId);
-  if (error) {
-    return fail(
-      error.code === "23503"
-        ? kind === "supplier"
-          ? "This supplier has purchases or payments, so it can't be deleted. Mark it inactive instead."
-          : "This customer has orders or payments, so they can't be deleted."
-        : friendlyDbError(error, `delete ${kind}`),
-    );
-  }
-  await audit(ctx, `${kind}.delete`, kind, id, `${kind === "supplier" ? "Supplier" : "Customer"} deleted`);
+  const { error } =
+    kind === "customer"
+      ? await ctx.supabase.rpc("delete_customer", { p_customer: id })
+      : await ctx.supabase.rpc("delete_supplier", { p_supplier: id });
+  if (error) return fail(friendlyDbError(error, `delete ${kind}`));
+  for (const p of ["/orders", "/purchases", "/payments"]) revalidatePath(p, "layout");
   revalidatePath(`/${table}`, "layout");
   return ok(undefined, "Deleted");
 }

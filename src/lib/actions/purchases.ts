@@ -19,7 +19,7 @@ export async function savePurchaseAction(input: unknown): Promise<ActionResult<{
   const { lines, receive_now, ...purchase } = parsed.data;
   if (purchase.attachment_path && !purchase.attachment_path.startsWith(`${ctx.businessId}/`)) return fail("Invalid attachment.");
 
-  const { data, error } = await ctx.supabase.rpc("save_purchase", {
+  const { data, error } = await ctx.supabase.rpc(purchase.id ? "edit_purchase" : "save_purchase", {
     p_business: ctx.businessId,
     p_purchase: receive_now ? { ...purchase, status: "ordered" } : purchase,
     p_lines: lines,
@@ -27,7 +27,8 @@ export async function savePurchaseAction(input: unknown): Promise<ActionResult<{
   if (error) return fail(friendlyDbError(error, "save_purchase"));
   const id = data as string;
 
-  if (receive_now) {
+  const { data: after } = await ctx.supabase.from("purchases").select("status").eq("id", data as string).single();
+  if (receive_now && after?.status !== "received") {
     // Separate step: if receiving fails the purchase is kept as "ordered" and can be received later.
     const rec = await ctx.supabase.rpc("receive_purchase", { p_purchase: id, p_receipts: null, p_batch_lot: null });
     if (rec.error) {
@@ -64,9 +65,10 @@ export async function setPurchaseStatusAction(id: string, status: PurchaseStatus
   return ok(undefined, status === "cancelled" ? "Purchase cancelled" : "Status updated");
 }
 
-export async function deletePurchaseAction(id: string): Promise<ActionResult> {
+/** Deletes a purchase in any state: received stock is taken back out and (if confirmed) payments deleted. */
+export async function deletePurchaseAction(id: string, deletePayments = false): Promise<ActionResult> {
   const ctx = await requireContext();
-  const { error } = await ctx.supabase.rpc("delete_purchase", { p_purchase: id });
+  const { error } = await ctx.supabase.rpc("delete_purchase_completely", { p_purchase: id, p_delete_payments: deletePayments });
   if (error) return fail(friendlyDbError(error, "delete_purchase"));
   revalidatePurchases();
   return ok(undefined, "Purchase deleted");

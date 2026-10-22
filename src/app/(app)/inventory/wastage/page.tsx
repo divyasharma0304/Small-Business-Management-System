@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { PackageX } from "lucide-react";
+import { PackageX, Trash2 } from "lucide-react";
+import { ConfirmAction } from "@/components/confirm-action";
+import { deleteWastageAction } from "@/lib/actions/inventory";
 import { ListToolbar } from "@/components/data/list-toolbar";
 import { Pagination } from "@/components/data/pagination";
 import { EmptyState } from "@/components/empty-state";
@@ -74,6 +76,7 @@ export default async function WastagePage({ searchParams }: PageProps<"/inventor
                   <TableHead className="text-right">Quantity</TableHead>
                   <TableHead className="text-right">Value</TableHead>
                   <TableHead className="hidden md:table-cell">Notes</TableHead>
+                  <TableHead className="w-12" />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -90,6 +93,18 @@ export default async function WastagePage({ searchParams }: PageProps<"/inventor
                     <TableCell className="text-right tabular">{formatQty(r.quantity, r.product_variants.products.unit)}</TableCell>
                     <TableCell className="text-right"><Money value={r.total_cost} /></TableCell>
                     <TableCell className="hidden max-w-60 truncate text-muted-foreground md:table-cell">{r.notes ?? "—"}</TableCell>
+                    <TableCell>
+                      {!r.batch_id && (
+                        <ConfirmAction
+                          trigger={<Button size="icon-sm" variant="ghost" aria-label="Delete wastage entry"><Trash2 /></Button>}
+                          title="Delete this wastage entry?"
+                          description="The quantity is put back into stock and the loss is removed from your profit."
+                          confirmLabel="Delete"
+                          destructive
+                          action={deleteWastageAction.bind(null, r.id)}
+                        />
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

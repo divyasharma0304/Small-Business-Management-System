@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/empty-state";
 import { Money } from "@/components/money";
 import { PageHeader } from "@/components/page-header";
 import { PaymentDialog } from "@/components/payments/payment-dialog";
+import { PaymentRowActions } from "@/components/payments/payment-row-actions";
 import { StatCard } from "@/components/stat-card";
 import { Badge, DemoBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
@@ -102,6 +103,7 @@ export default async function PaymentsPage({ searchParams }: PageProps<"/payment
                   <TableHead className="hidden sm:table-cell">Method</TableHead>
                   <TableHead className="hidden lg:table-cell">Reference</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
+                  <TableHead className="w-20" />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -126,6 +128,7 @@ export default async function PaymentsPage({ searchParams }: PageProps<"/payment
                       <TableCell className="hidden sm:table-cell">{p.method}</TableCell>
                       <TableCell className="hidden max-w-40 truncate text-muted-foreground lg:table-cell">{p.reference ?? "—"}</TableCell>
                       <TableCell className="text-right"><Money value={signed} signed /></TableCell>
+                      <TableCell><PaymentRowActions payment={p} methods={methods} today={today} /></TableCell>
                     </TableRow>
                   );
                 })}

@@ -34,6 +34,7 @@ interface Row {
   max_stock: number | null;
   location: string | null;
   stock_value: number;
+  highest_cost: number;
   is_low: boolean;
   is_out: boolean;
 }
@@ -125,7 +126,7 @@ export default async function InventoryPage({ searchParams }: PageProps<"/invent
               </TableHeader>
               <TableBody>
                 {rows.map((r) => {
-                  const item: StockItem = { ...r, quantity: Number(r.quantity), avg_cost: Number(r.avg_cost), min_stock: Number(r.min_stock), max_stock: r.max_stock == null ? null : Number(r.max_stock) };
+                  const item: StockItem = { ...r, quantity: Number(r.quantity), avg_cost: Number(r.avg_cost), highest_cost: Number(r.highest_cost), min_stock: Number(r.min_stock), max_stock: r.max_stock == null ? null : Number(r.max_stock) };
                   return (
                     <TableRow key={r.variant_id}>
                       <TableCell>

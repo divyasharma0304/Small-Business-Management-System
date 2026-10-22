@@ -18,7 +18,8 @@ export default async function EditPurchasePage({ params }: PageProps<"/purchases
   const purchase = data as Purchase;
   const { data: lineRows } = await ctx.supabase.from("purchase_items").select("*").eq("purchase_id", id).order("sort_order");
   const lines = (lineRows ?? []) as PurchaseItem[];
-  if (!["draft", "ordered"].includes(purchase.status) || lines.some((l) => l.received_quantity > 0)) redirect(`/purchases/${id}`);
+  if (purchase.status === "cancelled") redirect(`/purchases/${id}`);
+  const received = lines.some((l) => l.received_quantity > 0);
 
   const [items, suppliers, attachmentUrl] = await Promise.all([
     loadPickerItems(ctx, "purchase"),
@@ -29,13 +30,20 @@ export default async function EditPurchasePage({ params }: PageProps<"/purchases
   return (
     <>
       <PageHeader title={`Edit ${purchase.purchase_number}`} back={{ href: `/purchases/${id}`, label: purchase.purchase_number }} />
+      {received && (
+        <p className="mb-4 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm">
+          {purchase.status === "received"
+            ? "This purchase was already received. When you save, the received stock is taken back out, your changes are saved, and everything is received again at the new quantities and costs — in one step."
+            : "Part of this purchase was received. When you save, the received stock is taken back out and the purchase goes back to “ordered” — then use “Receive stock” again."}
+        </p>
+      )}
       <PurchaseForm
         init={{
           id: purchase.id,
           supplier_id: purchase.supplier_id,
           purchase_date: purchase.purchase_date,
           invoice_number: purchase.invoice_number ?? "",
-          status: purchase.status as "draft" | "ordered",
+          status: purchase.status === "draft" ? "draft" : "ordered",
           discount_amount: purchase.discount_amount ? String(purchase.discount_amount) : "",
           other_charges: purchase.other_charges ? String(purchase.other_charges) : "",
           attachment_path: purchase.attachment_path,

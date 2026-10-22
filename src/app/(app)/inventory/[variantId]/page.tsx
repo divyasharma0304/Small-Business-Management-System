@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { requireContext } from "@/lib/context";
 import { formatQty } from "@/lib/format";
 import { parseListParams } from "@/lib/list-params";
+import { loadUndoneIds } from "@/lib/queries/catalog";
 
 export const metadata: Metadata = { title: "Stock history" };
 
@@ -43,7 +44,7 @@ export default async function VariantStockPage({ params, searchParams }: PagePro
           <>
             <Button variant="outline" asChild><Link href={`/catalog/${item.product_id}`}>View item</Link></Button>
             <AdjustStockDialog
-              item={{ variant_id: item.variant_id, item_name: item.item_name, unit: item.unit, quantity: Number(item.quantity), avg_cost: Number(item.avg_cost) }}
+              item={{ variant_id: item.variant_id, item_name: item.item_name, unit: item.unit, quantity: Number(item.quantity), avg_cost: Number(item.avg_cost), highest_cost: Number(item.highest_cost) }}
               trigger={<Button><SlidersHorizontal /> Adjust stock</Button>}
             />
           </>
@@ -59,7 +60,7 @@ export default async function VariantStockPage({ params, searchParams }: PagePro
         <p className="flex items-center justify-center gap-2 rounded-xl border border-dashed p-10 text-sm text-muted-foreground"><History className="size-4" /> No stock movements yet.</p>
       ) : (
         <>
-          <Ledger rows={(txns ?? []).map((t) => ({ ...t, unit: item.unit })) as LedgerRow[]} timeZone={ctx.business.timezone} />
+          <Ledger rows={(txns ?? []).map((t) => ({ ...t, unit: item.unit })) as LedgerRow[]} timeZone={ctx.business.timezone} undone={await loadUndoneIds(ctx, [variantId])} />
           <Pagination pathname={`/inventory/${variantId}`} searchParams={sp} page={lp.page} total={count ?? 0} />
         </>
       )}

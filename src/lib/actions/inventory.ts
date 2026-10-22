@@ -90,3 +90,21 @@ export async function updateStockLevelsAction(input: unknown): Promise<ActionRes
   revalidateStock();
   return ok(undefined, "Stock levels saved");
 }
+
+/** Undo a stock adjustment or opening stock by adding the opposite movement. */
+export async function undoStockMovementAction(txnId: string): Promise<ActionResult> {
+  const ctx = await requireContext();
+  const { error } = await ctx.supabase.rpc("undo_stock_movement", { p_txn: txnId });
+  if (error) return fail(friendlyDbError(error, "undo movement"));
+  revalidateStock();
+  return ok(undefined, "Stock movement undone");
+}
+
+export async function deleteWastageAction(id: string): Promise<ActionResult> {
+  const ctx = await requireContext();
+  const { error } = await ctx.supabase.rpc("delete_wastage", { p_wastage: id });
+  if (error) return fail(friendlyDbError(error, "delete wastage"));
+  revalidateStock();
+  revalidatePath("/reports", "layout");
+  return ok(undefined, "Wastage entry deleted — stock put back");
+}

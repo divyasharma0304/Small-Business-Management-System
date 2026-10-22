@@ -112,7 +112,7 @@ export async function quickCreateItemAction(input: unknown): Promise<ActionResul
   revalidatePath("/catalog", "layout");
   revalidatePath("/inventory", "layout");
   return ok(
-    { ...item, selling_price: Number(item.selling_price), cost_price: Number(item.cost_price), tax_rate: Number(item.tax_rate), stock_quantity: 0, avg_cost: 0 } as PickerItem,
+    { ...item, selling_price: Number(item.selling_price), cost_price: Number(item.cost_price), tax_rate: Number(item.tax_rate), stock_quantity: 0, avg_cost: 0, highest_cost: Number(item.highest_cost ?? 0) } as PickerItem,
     `"${d.name}" added`,
   );
 }
@@ -135,7 +135,7 @@ export async function quickCreateVariantAction(input: unknown): Promise<ActionRe
   revalidatePath("/catalog", "layout");
   revalidatePath("/inventory", "layout");
   return ok(
-    { ...item, selling_price: Number(item.selling_price), cost_price: Number(item.cost_price), tax_rate: Number(item.tax_rate), stock_quantity: 0, avg_cost: 0 } as PickerItem,
+    { ...item, selling_price: Number(item.selling_price), cost_price: Number(item.cost_price), tax_rate: Number(item.tax_rate), stock_quantity: 0, avg_cost: 0, highest_cost: Number(item.highest_cost ?? 0) } as PickerItem,
     `"${item.item_name}" added`,
   );
 }

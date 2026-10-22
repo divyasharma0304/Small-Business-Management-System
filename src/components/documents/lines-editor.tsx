@@ -71,7 +71,7 @@ export function LinesEditor({
   function pick(key: string, item: PickerItem) {
     patch(key, {
       variant_id: item.variant_id,
-      unit_price: String(mode === "sale" ? item.selling_price : (item.avg_cost && item.avg_cost > 0 ? item.avg_cost : item.cost_price)),
+      unit_price: String(mode === "sale" ? item.selling_price : Math.max(item.highest_cost ?? 0, item.avg_cost ?? 0, item.cost_price ?? 0)),
       tax_rate: taxEnabled ? String(item.tax_rate ?? 0) : "0",
       amount: undefined,
     });

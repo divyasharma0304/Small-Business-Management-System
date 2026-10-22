@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/page-header";
 import { requireContext } from "@/lib/context";
 import { addDays, startOfDay } from "@/lib/dates";
 import { ilikeTerm, parseListParams } from "@/lib/list-params";
+import { loadUndoneIds } from "@/lib/queries/catalog";
 import type { InventoryTxnType } from "@/lib/types";
 
 export const metadata: Metadata = { title: "Stock history" };
@@ -50,7 +51,7 @@ export default async function StockHistoryPage({ searchParams }: PageProps<"/inv
         <EmptyState icon={History} title="No stock movements found" description="Purchases, sales, production, wastage and adjustments will appear here." />
       ) : (
         <>
-          <Ledger rows={rows} timeZone={ctx.business.timezone} showItem />
+          <Ledger rows={rows} timeZone={ctx.business.timezone} showItem undone={await loadUndoneIds(ctx, Array.from(new Set(rows.map((r) => r.variant_id))))} />
           <Pagination pathname="/inventory/history" searchParams={sp} page={lp.page} total={count ?? 0} />
         </>
       )}

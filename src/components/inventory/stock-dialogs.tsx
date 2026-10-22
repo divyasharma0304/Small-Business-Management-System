@@ -24,6 +24,8 @@ export interface StockItem {
   min_stock?: number;
   max_stock?: number | null;
   location?: string | null;
+  /** Highest known cost — pre-filled as the cost of added stock. */
+  highest_cost?: number | null;
 }
 
 function useDialogAction() {
@@ -53,7 +55,8 @@ export function AdjustStockDialog({ item, trigger }: { item: StockItem; trigger:
   const { format, symbol } = useCurrency();
   const [mode, setMode] = useState<"add" | "remove" | "set">("set");
   const [qty, setQty] = useState("");
-  const [cost, setCost] = useState("");
+  const suggested = Math.max(item.highest_cost ?? 0, item.avg_cost ?? 0);
+  const [cost, setCost] = useState(suggested > 0 ? String(suggested) : "");
   const [notes, setNotes] = useState("");
   const [lot, setLot] = useState("");
   const n = Number(qty || 0);
@@ -89,7 +92,7 @@ export function AdjustStockDialog({ item, trigger }: { item: StockItem; trigger:
             </Field>
           </div>
           {adding && (
-            <Field label={`Unit cost of added stock (${symbol})`} htmlFor="adj-cost" hint={`Leave empty to use the current average cost (${format(item.avg_cost)}).`} error={errors.unit_cost}>
+            <Field label={`Unit cost of added stock (${symbol})`} htmlFor="adj-cost" hint={suggested > 0 ? `Pre-filled with the highest cost known for this item. Change it if you paid something else.` : `Enter what one unit cost you (empty = ${format(item.avg_cost)}, the current average).`} error={errors.unit_cost}>
               <Input id="adj-cost" type="number" min={0} step="0.01" value={cost} onChange={(e) => setCost(e.target.value)} />
             </Field>
           )}

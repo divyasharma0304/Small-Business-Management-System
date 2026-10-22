@@ -1,5 +1,9 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { Trash2 } from "lucide-react";
+import { ConfirmAction } from "@/components/confirm-action";
+import { Button } from "@/components/ui/button";
+import { deleteRecipeAction } from "@/lib/actions/production";
 import { PageHeader } from "@/components/page-header";
 import { NewBatchDialog } from "@/components/production/batch-dialogs";
 import { RecipeForm } from "@/components/production/recipe-form";
@@ -24,7 +28,20 @@ export default async function EditRecipePage({ params }: PageProps<"/production/
       <PageHeader
         title={recipe.name}
         back={{ href: "/production/recipes", label: "Recipes" }}
-        actions={recipe.is_active ? <NewBatchDialog recipes={recipes} today={todayIn(ctx.business.timezone)} defaultRecipe={recipe.id} /> : undefined}
+        actions={
+          <>
+            <ConfirmAction
+              trigger={<Button variant="ghost"><Trash2 /> Delete</Button>}
+              title={`Delete recipe "${recipe.name}"?`}
+              description="The recipe is removed. Production batches already made with it are kept, and your stock doesn't change."
+              confirmLabel="Delete recipe"
+              destructive
+              action={deleteRecipeAction.bind(null, recipe.id)}
+              redirectTo="/production/recipes"
+            />
+            {recipe.is_active && <NewBatchDialog recipes={recipes} today={todayIn(ctx.business.timezone)} defaultRecipe={recipe.id} />}
+          </>
+        }
       />
       <RecipeForm
         init={{

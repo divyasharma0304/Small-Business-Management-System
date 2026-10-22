@@ -37,7 +37,9 @@ export function RecipeForm({ init, items, defaultWastage }: { init: RecipeInit; 
   const byId = useMemo(() => new Map(items.map((i) => [i.variant_id, i])), [items]);
   const outputs = items.filter((i) => i.item_type !== "material");
 
-  const unitCost = (i: PickerItem | undefined) => (i ? (i.avg_cost && i.avg_cost > 0 ? i.avg_cost : i.cost_price) : 0);
+  // Estimates use the HIGHEST known cost (standard, average, or highest price paid) so stock
+  // entered without a cost doesn't make a recipe look cheaper than it really is.
+  const unitCost = (i: PickerItem | undefined) => (i ? Math.max(i.highest_cost ?? 0, i.avg_cost ?? 0, i.cost_price ?? 0) : 0);
   const batchCost = r.items.reduce((a, it) => {
     const comp = it.component_variant_id ? byId.get(it.component_variant_id) : undefined;
     return a + Number(it.quantity || 0) * (1 + Number(it.wastage_pct || 0) / 100) * unitCost(comp);
@@ -118,7 +120,7 @@ export function RecipeForm({ init, items, defaultWastage }: { init: RecipeInit; 
             <div><dt className="text-muted-foreground">Margin at {format(output.selling_price)}</dt><dd className="font-medium tabular">{(((output.selling_price - perUnit) / output.selling_price) * 100).toFixed(1)}%</dd></div>
           )}
         </dl>
-        <p className="text-xs text-muted-foreground">Estimates use current average stock costs. Actual batch cost is calculated when the batch is completed.</p>
+        <p className="text-xs text-muted-foreground">Estimates use each material&apos;s highest known cost (standard cost, average cost or the highest price you&apos;ve paid). The actual batch cost is calculated from real stock costs when you complete a batch.</p>
       </FormSection>
 
       <FormSection title="Other">

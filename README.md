@@ -390,6 +390,23 @@ Orders keep snapshots of the item description, SKU, category, price, tax rate an
 - **Negative stock** is blocked by default with a clear message. You can allow it in Settings.
 - **Low stock**: quantity ≤ minimum (when a minimum is set). Low stock shows on the dashboard, in the sidebar badge, on the Inventory page and in reports.
 - The history keeps full detail, so a different valuation method (e.g. FIFO layers) could be derived later.
+- **Recipe/BOM estimates use the highest known cost** of each material: the greatest of its standard cost, current average cost, and the highest price ever paid or entered. Stock that came in at ₹0 (for example, opening stock from before Velqora) therefore doesn't make a recipe look cheaper than it is. Actual batch costs and COGS still use the weighted average. The Adjust stock dialog pre-fills the cost of added stock with this highest cost.
+
+### Correcting mistakes
+
+Every record can be edited or deleted. When stock has already moved, the correction moves it back first, in the same transaction:
+
+| Record | Edit | Delete |
+|---|---|---|
+| Order recorded as a sale | Stock put back, changes saved, sale recorded again | Stock put back; its payments deleted too (you're told first) |
+| Received purchase | Received stock taken out, changes saved, received again | Received stock taken out; blocked if it was already used/sold |
+| Stock adjustment / opening stock | — | **Undo** adds an opposite entry (both stay visible) |
+| Wastage entry | — | Stock put back |
+| Completed production batch | — | Materials returned, finished goods removed |
+| Customer / supplier with history | ✓ | Their orders/purchases are kept as walk-in / no supplier |
+| Payments, expenses, items, recipes, categories, attributes, payment methods | ✓ | ✓ |
+
+When stock is taken back out at its original cost, the weighted-average cost is recalculated so the total stock value stays correct.
 
 ### Production
 

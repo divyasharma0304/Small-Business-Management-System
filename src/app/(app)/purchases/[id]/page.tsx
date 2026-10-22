@@ -60,13 +60,26 @@ export default async function PurchasePage({ params }: PageProps<"/purchases/[id
         description={`${formatDate(purchase.purchase_date)} · ${purchase.suppliers?.name ?? "No supplier"}${purchase.invoice_number ? ` · Invoice ${purchase.invoice_number}` : ""}`}
         actions={
           <>
-            {editable && payments.length === 0 && (
-              <ConfirmAction trigger={<Button variant="ghost"><Trash2 /> Delete</Button>} title={`Delete ${purchase.purchase_number}?`} description="Nothing has been received, so the purchase can be deleted permanently." confirmLabel="Delete" destructive action={deletePurchaseAction.bind(null, purchase.id)} redirectTo="/purchases" />
-            )}
+            <ConfirmAction
+              trigger={<Button variant="ghost"><Trash2 /> Delete</Button>}
+              title={`Delete ${purchase.purchase_number}?`}
+              description={
+                <ul className="list-disc space-y-1 pl-5">
+                  <li>The purchase is removed permanently.</li>
+                  {anyReceived && <li>The stock it added is taken back out. If some of it was already used or sold, the delete stops and nothing changes.</li>}
+                  {payments.length > 0 && <li><span className="font-medium text-foreground">{payments.length} payment{payments.length === 1 ? "" : "s"}</span> to the supplier will be deleted too.</li>}
+                  <li>This can&apos;t be undone.</li>
+                </ul>
+              }
+              confirmLabel="Delete purchase"
+              destructive
+              action={deletePurchaseAction.bind(null, purchase.id, payments.length > 0)}
+              redirectTo="/purchases"
+            />
             {editable && (
               <ConfirmAction trigger={<Button variant="ghost"><Ban /> Cancel</Button>} title="Cancel this purchase?" description="The purchase stays on record as cancelled. Nothing was received, so stock is unchanged." confirmLabel="Cancel purchase" destructive action={setPurchaseStatusAction.bind(null, purchase.id, "cancelled")} />
             )}
-            {editable && <Button variant="outline" asChild><Link href={`/purchases/${purchase.id}/edit`}><Pencil /> Edit</Link></Button>}
+            {purchase.status !== "cancelled" && <Button variant="outline" asChild><Link href={`/purchases/${purchase.id}/edit`}><Pencil /> Edit</Link></Button>}
             {purchase.status === "draft" && (
               <ConfirmAction trigger={<Button variant="outline"><Send /> Mark ordered</Button>} title="Mark as ordered?" description="Use this once you've placed the order with the supplier." confirmLabel="Mark ordered" action={setPurchaseStatusAction.bind(null, purchase.id, "ordered")} />
             )}
@@ -128,7 +141,7 @@ export default async function PurchasePage({ params }: PageProps<"/purchases/[id
                 <PaymentDialog direction="out" methods={methods} today={today} purchaseId={purchase.id} suggestedAmount={owed} trigger={<Button size="sm"><Plus /> Record payment</Button>} />
               )}
             </CardHeader>
-            <CardContent className="px-0"><PaymentsTable payments={payments} /></CardContent>
+            <CardContent className="px-0"><PaymentsTable payments={payments} methods={methods} today={today} /></CardContent>
           </Card>
         </div>
 

@@ -355,7 +355,7 @@ describe("production", () => {
       )).rows.map((r) => r.txn_type).sort(),
     );
     expect(types).toEqual(["production_consumption", "production_output", "wastage"]);
-    await expect(rpc(db, OWNER, "delete_production_batch", [batch])).rejects.toThrow(/cannot be deleted/);
+    // completed batches can now be deleted (reversal) — covered in "corrections" tests
   });
 });
 
@@ -484,5 +484,126 @@ describe("adding a variant from a purchase", () => {
     expect(num(after.avg_cost)).toBe(0.96);
     const single = await rpc<string>(db, OWNER4, "save_product", [b, { name: "Wax", item_type: "material", track_inventory: true }, [{}], []]);
     await expect(rpc(db, OWNER4, "add_product_variant", [single, "Big", null, 0, 0])).rejects.toThrow(/doesn't use variants/);
+  });
+});
+
+describe("corrections: edit & delete everywhere", () => {
+  const U = "66666666-6666-4666-8666-666666666666";
+  let b: string;
+  const vOf = async (p: string) =>
+    (await asUser(db, U, async (tx) => (await tx.query<{ id: string }>("select id from product_variants where product_id = $1", [p])).rows[0])).id;
+  const qty = async (v: string) =>
+    num((await asUser(db, U, async (tx) => (await tx.query<{ quantity: string }>("select quantity from inventory_levels where variant_id = $1", [v])).rows[0])).quantity);
+  const one = async <T,>(sql: string, p: unknown[]) => asUser(db, U, async (tx) => (await tx.query<T>(sql, p)).rows[0]);
+
+  it("uses the highest known cost for recipe estimates", async () => {
+    await createUser(db, U);
+    b = await rpc<string>(db, U, "create_business", [{ name: "Fix Co", modules: { production: true } }]);
+    const jar = await rpc<string>(db, U, "save_product", [b, { name: "Jar", item_type: "material", track_inventory: true }, [{ cost_price: 0, opening_stock: 93, opening_unit_cost: 0 }], []]);
+    const jv = await vOf(jar);
+    await rpc(db, U, "adjust_stock", [b, jv, "remove", 23, null, "count", null]);
+    await rpc(db, U, "adjust_stock", [b, jv, "add", 1, 20, "found one", null]);
+    const lvl = await one<{ avg_cost: string }>("select avg_cost from inventory_levels where variant_id = $1", [jv]);
+    expect(num(lvl.avg_cost)).toBeCloseTo(0.28, 2); // the screenshot situation
+    const out = await rpc<string>(db, U, "save_product", [b, { name: "Candle", track_inventory: true }, [{ selling_price: 200 }], []]);
+    const r = await rpc<string>(db, U, "save_recipe", [b, { name: "C", variant_id: await vOf(out), yield_quantity: 1 }, [{ component_variant_id: jv, quantity: 1 }]]);
+    expect(num(await rpc(db, U, "recipe_estimated_cost", [r]))).toBe(20);
+    const pick = await one<{ highest_cost: string }>("select highest_cost from item_picker where variant_id = $1", [jv]);
+    expect(num(pick.highest_cost)).toBe(20);
+  });
+
+  it("edits an order that was already recorded as a sale, keeping stock right", async () => {
+    const p = await rpc<string>(db, U, "save_product", [b, { name: "Mug", track_inventory: true }, [{ selling_price: 100, opening_stock: 10, opening_unit_cost: 40 }], []]);
+    const v = await vOf(p);
+    const o = await rpc<string>(db, U, "save_order", [b, { status: "confirmed" }, [{ variant_id: v, quantity: 3, unit_price: 100 }]]);
+    await rpc(db, U, "set_order_status", [o, "delivered"]);
+    expect(await qty(v)).toBe(7);
+    await rpc(db, U, "edit_order", [b, { id: o, order_date: "2026-10-22" }, [{ variant_id: v, quantity: 5, unit_price: 90 }]]);
+    expect(await qty(v)).toBe(5);
+    const ord = await one<Record<string, string>>("select * from orders where id = $1", [o]);
+    expect(ord.status).toBe("delivered");
+    expect(num(ord.total)).toBe(450);
+    expect(num(ord.cogs_total)).toBe(200);
+    expect(ord.recognized_at).not.toBeNull();
+  });
+
+  it("deletes a sold order with its payment and puts stock back", async () => {
+    const p = await rpc<string>(db, U, "save_product", [b, { name: "Bowl", track_inventory: true }, [{ selling_price: 50, opening_stock: 4, opening_unit_cost: 10 }], []]);
+    const v = await vOf(p);
+    const o = await rpc<string>(db, U, "save_order", [b, { status: "confirmed" }, [{ variant_id: v, quantity: 2, unit_price: 50 }]]);
+    await asUser(db, U, (tx) => tx.query("insert into payments (business_id, direction, amount, method, order_id) values ($1,'in',100,'UPI',$2)", [b, o]));
+    await expect(rpc(db, U, "delete_order_completely", [o, false])).rejects.toThrow(/Confirm deleting them/);
+    await rpc(db, U, "delete_order_completely", [o, true]);
+    expect(await qty(v)).toBe(4);
+    const n = await one<{ n: string }>("select (select count(*) from orders where id=$1) + (select count(*) from payments where order_id=$1) n", [o]);
+    expect(num(n.n)).toBe(0);
+  });
+
+  it("edits and deletes a received purchase", async () => {
+    const p = await rpc<string>(db, U, "save_product", [b, { name: "Wax", item_type: "material", track_inventory: true }, [{}], []]);
+    const v = await vOf(p);
+    const pu = await rpc<string>(db, U, "save_purchase", [b, { status: "ordered" }, [{ variant_id: v, quantity: 10, unit_price: 5 }]]);
+    await rpc(db, U, "receive_purchase", [pu, null, null]);
+    expect(await qty(v)).toBe(10);
+    await rpc(db, U, "edit_purchase", [b, { id: pu, status: "ordered" }, [{ variant_id: v, quantity: 12, unit_price: 5 }]]);
+    expect(await qty(v)).toBe(12);
+    expect((await one<{ status: string }>("select status from purchases where id=$1", [pu])).status).toBe("received");
+    await rpc(db, U, "delete_purchase_completely", [pu, false]);
+    expect(await qty(v)).toBe(0);
+  });
+
+  it("undoes an adjustment once, and deletes standalone wastage", async () => {
+    const p = await rpc<string>(db, U, "save_product", [b, { name: "Tape", item_type: "material", track_inventory: true }, [{ opening_stock: 5, opening_unit_cost: 2 }], []]);
+    const v = await vOf(p);
+    await rpc(db, U, "adjust_stock", [b, v, "add", 3, 2, "typo", null]);
+    const t = await one<{ id: string }>("select id from inventory_transactions where variant_id=$1 and txn_type='adjustment'", [v]);
+    await rpc(db, U, "undo_stock_movement", [t.id]);
+    expect(await qty(v)).toBe(5);
+    await expect(rpc(db, U, "undo_stock_movement", [t.id])).rejects.toThrow(/already been undone/);
+    const w = await rpc<string>(db, U, "record_wastage", [b, v, 2, "damage", "2026-10-22", null]);
+    expect(await qty(v)).toBe(3);
+    await rpc(db, U, "delete_wastage", [w]);
+    expect(await qty(v)).toBe(5);
+  });
+
+  it("deletes a completed production batch, returning materials", async () => {
+    const m = await rpc<string>(db, U, "save_product", [b, { name: "Soy", item_type: "material", track_inventory: true }, [{ opening_stock: 100, opening_unit_cost: 1 }], []]);
+    const mv = await vOf(m);
+    const out = await rpc<string>(db, U, "save_product", [b, { name: "Lamp", track_inventory: true }, [{ selling_price: 10 }], []]);
+    const ov = await vOf(out);
+    const r = await rpc<string>(db, U, "save_recipe", [b, { name: "L", variant_id: ov, yield_quantity: 1 }, [{ component_variant_id: mv, quantity: 10, wastage_pct: 10 }]]);
+    const bt = await rpc<string>(db, U, "create_production_batch", [b, r, 2, "2026-10-22", null, false]);
+    await rpc(db, U, "complete_production_batch", [bt, 2, null, 0, null]);
+    expect(await qty(mv)).toBe(78);
+    await rpc(db, U, "delete_production_batch", [bt]);
+    expect(await qty(mv)).toBe(100);
+    expect(await qty(ov)).toBe(0);
+  });
+
+  it("deletes a customer with orders, keeping the orders as walk-in", async () => {
+    const c = await one<{ id: string }>("insert into customers (business_id, name) values ($1,'Temp') returning id", [b]);
+    const p = await rpc<string>(db, U, "save_product", [b, { name: "Svc", item_type: "service" }, [{ selling_price: 10 }], []]);
+    const o = await rpc<string>(db, U, "save_order", [b, { customer_id: c.id, status: "confirmed" }, [{ variant_id: await vOf(p), quantity: 1, unit_price: 10 }]]);
+    await rpc(db, U, "delete_customer", [c.id]);
+    const ord = await one<{ customer_id: string | null }>("select customer_id from orders where id=$1", [o]);
+    expect(ord.customer_id).toBeNull();
+  });
+});
+
+describe("reversals keep stock value correct", () => {
+  const U2 = "77777777-7777-4777-8777-777777777777";
+  it("deleting a received purchase restores the previous average cost", async () => {
+    await createUser(db, U2);
+    const b = await rpc<string>(db, U2, "create_business", [{ name: "Avg Co" }]);
+    const p = await rpc<string>(db, U2, "save_product", [b, { name: "Jar", item_type: "material", track_inventory: true }, [{ opening_stock: 93, opening_unit_cost: 0 }], []]);
+    const v = (await asUser(db, U2, async (tx) => (await tx.query<{ id: string }>("select id from product_variants where product_id = $1", [p])).rows[0])).id;
+    await rpc(db, U2, "adjust_stock", [b, v, "remove", 23, null, "count", null]);
+    await rpc(db, U2, "adjust_stock", [b, v, "add", 1, 20, "found", null]);
+    const avgOf = async () => num((await asUser(db, U2, async (tx) => (await tx.query<{ avg_cost: string }>("select avg_cost from inventory_levels where variant_id = $1", [v])).rows[0])).avg_cost);
+    const before = await avgOf();
+    const pu = await rpc<string>(db, U2, "save_purchase", [b, { status: "ordered" }, [{ variant_id: v, quantity: 10, unit_price: 20 }]]);
+    await rpc(db, U2, "receive_purchase", [pu, null, null]);
+    await rpc(db, U2, "delete_purchase_completely", [pu, false]);
+    expect(await avgOf()).toBeCloseTo(before, 3);
   });
 });

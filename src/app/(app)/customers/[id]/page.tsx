@@ -43,17 +43,15 @@ export default async function CustomerPage({ params }: PageProps<"/customers/[id
         badge={c.is_demo ? <DemoBadge /> : undefined}
         actions={
           <>
-            {orders.length === 0 && (
-              <ConfirmAction
+            <ConfirmAction
                 trigger={<Button variant="ghost"><Trash2 /> Delete</Button>}
                 title={`Delete ${c.name}?`}
-                description="This permanently removes the customer."
+                description={orders.length > 0 ? `The customer is removed. Their ${orders.length} order(s) and payments are kept, shown as walk-in sales.` : "This permanently removes the customer."}
                 confirmLabel="Delete"
                 destructive
                 action={deleteCustomerAction.bind(null, c.id)}
                 redirectTo="/customers"
               />
-            )}
             <PartyDialog kind="customer" initial={c} taxLabel={ctx.business.tax_label} trigger={<Button variant="outline"><Pencil /> Edit</Button>} />
             <Button asChild><Link href={`/orders/new?customer=${c.id}`}><Plus /> New order</Link></Button>
           </>

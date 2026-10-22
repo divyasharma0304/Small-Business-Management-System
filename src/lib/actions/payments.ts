@@ -49,3 +49,19 @@ export async function deletePaymentAction(id: string): Promise<ActionResult> {
   revalidateMoney();
   return ok(undefined, "Payment deleted");
 }
+
+/** Corrects a payment's amount, date, method, reference or notes. Order/purchase totals are recalculated. */
+export async function updatePaymentAction(id: string, input: unknown): Promise<ActionResult> {
+  const ctx = await requireContext();
+  const parsed = paymentSchema.safeParse(input);
+  if (!parsed.success) return fail("Please fix the highlighted fields.", zodFieldErrors(parsed.error.issues));
+  const { data: old } = await ctx.supabase.from("payments").select("*").eq("id", id).eq("business_id", ctx.businessId).single();
+  if (!old) return fail("Payment not found.");
+  const p = parsed.data;
+  const patch = { payment_date: p.payment_date, amount: p.amount, method: p.method, reference: p.reference, notes: p.notes, kind: p.kind };
+  const { error } = await ctx.supabase.from("payments").update(patch).eq("id", id).eq("business_id", ctx.businessId);
+  if (error) return fail(friendlyDbError(error, "update payment"));
+  await audit(ctx, "payment.update", "payment", id, `Payment changed from ${old.amount} to ${p.amount}`, old, patch);
+  revalidateMoney();
+  return ok(undefined, "Payment updated");
+}

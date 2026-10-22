@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { audit } from "@/lib/audit";
 import { requireContext } from "@/lib/context";
 import { fail, friendlyDbError, ok, zodFieldErrors } from "@/lib/errors";
 import type { ActionResult, ProductionStatus } from "@/lib/types";
@@ -106,4 +107,15 @@ export async function deleteBatchAction(id: string): Promise<ActionResult> {
   if (error) return fail(friendlyDbError(error, "delete batch"));
   revalidateProduction();
   return ok(undefined, "Batch deleted");
+}
+
+export async function deleteRecipeAction(id: string): Promise<ActionResult> {
+  const ctx = await requireContext();
+  const { data: r } = await ctx.supabase.from("recipes").select("name").eq("id", id).eq("business_id", ctx.businessId).maybeSingle();
+  if (!r) return fail("Recipe not found.");
+  const { error } = await ctx.supabase.from("recipes").delete().eq("id", id).eq("business_id", ctx.businessId);
+  if (error) return fail(friendlyDbError(error, "delete recipe"));
+  await audit(ctx, "recipe.delete", "recipe", id, `Recipe "${r.name}" deleted`);
+  revalidateProduction();
+  return ok(undefined, "Recipe deleted");
 }

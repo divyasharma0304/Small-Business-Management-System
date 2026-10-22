@@ -14,7 +14,7 @@ export default async function EditOrderPage({ params }: PageProps<"/orders/[id]/
   const { data } = await ctx.supabase.from("orders").select("*").eq("id", id).eq("business_id", ctx.businessId).maybeSingle();
   if (!data) notFound();
   const order = data as Order;
-  if (order.recognized_at || ["cancelled", "returned"].includes(order.status)) redirect(`/orders/${id}`);
+  if (["cancelled", "returned"].includes(order.status)) redirect(`/orders/${id}`);
 
   const [{ data: lineRows }, items, customers, methods] = await Promise.all([
     ctx.supabase.from("order_items").select("*").eq("order_id", id).order("sort_order"),
@@ -27,12 +27,17 @@ export default async function EditOrderPage({ params }: PageProps<"/orders/[id]/
   const missing = lines.filter((l) => !items.some((i) => i.variant_id === l.variant_id));
   const allItems = [
     ...items,
-    ...missing.map((l) => ({ variant_id: l.variant_id, item_name: `${l.description} (inactive)`, sku: l.sku, item_type: "product", unit: "", tax_rate: l.tax_rate, track_inventory: l.track_inventory, selling_price: l.unit_price, cost_price: 0, stock_quantity: null, avg_cost: null })),
+    ...missing.map((l) => ({ variant_id: l.variant_id, item_name: `${l.description} (inactive)`, sku: l.sku, item_type: "product", unit: "", tax_rate: l.tax_rate, track_inventory: l.track_inventory, selling_price: l.unit_price, cost_price: 0, stock_quantity: null, avg_cost: null, highest_cost: null })),
   ];
 
   return (
     <>
       <PageHeader title={`Edit ${order.order_number}`} back={{ href: `/orders/${id}`, label: order.order_number }} />
+      {order.recognized_at && !order.is_imported && (
+        <p className="mb-4 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm">
+          This order is already recorded as a sale. When you save, its items are put back into stock, your changes are saved, and the sale is recorded again at today&apos;s stock cost — all in one step. Payments stay as they are.
+        </p>
+      )}
       <OrderForm
         init={{
           id: order.id,

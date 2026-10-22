@@ -54,7 +54,23 @@ export default async function BatchPage({ params }: PageProps<"/production/batch
         badge={<><StatusBadge status={batch.status} />{batch.is_demo && <DemoBadge />}</>}
         description={`${formatDate(batch.production_date)} · ${formatQty(batch.planned_quantity, unit)} × ${nameOf(batch.product_variants)}${batch.recipes ? ` · Recipe: ${batch.recipes.name}` : ""}`}
         actions={
-          open ? (
+          batch.status === "completed" ? (
+            <ConfirmAction
+              trigger={<Button variant="ghost"><Trash2 /> Delete</Button>}
+              title="Delete this completed batch?"
+              description={
+                <ul className="list-disc space-y-1 pl-5">
+                  <li>The materials it used (and wasted) go back into stock.</li>
+                  <li>The {formatQty(batch.actual_quantity, unit)} it produced are removed from stock. If some were already sold or used, the delete stops and nothing changes.</li>
+                  <li>This can&apos;t be undone.</li>
+                </ul>
+              }
+              confirmLabel="Delete batch"
+              destructive
+              action={deleteBatchAction.bind(null, batch.id)}
+              redirectTo="/production"
+            />
+          ) : open ? (
             <>
               <ConfirmAction trigger={<Button variant="ghost"><Trash2 /> Delete</Button>} title="Delete this batch?" description="Nothing has been consumed or produced yet, so it can be deleted." confirmLabel="Delete" destructive action={deleteBatchAction.bind(null, batch.id)} redirectTo="/production" />
               <ConfirmAction trigger={<Button variant="ghost"><Ban /> Cancel</Button>} title="Cancel this batch?" description="No stock changes. The batch stays on record as cancelled." confirmLabel="Cancel batch" destructive action={setBatchStatusAction.bind(null, batch.id, "cancelled")} />

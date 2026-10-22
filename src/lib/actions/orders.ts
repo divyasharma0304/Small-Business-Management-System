@@ -17,7 +17,11 @@ export async function saveOrderAction(input: unknown): Promise<ActionResult<{ id
   const parsed = orderSchema.safeParse(input);
   if (!parsed.success) return fail("Please fix the highlighted fields.", zodFieldErrors(parsed.error.issues));
   const { lines, ...order } = parsed.data;
-  const { data, error } = await ctx.supabase.rpc("save_order", { p_business: ctx.businessId, p_order: order, p_lines: lines });
+  // Existing orders go through edit_order, which also handles orders already recorded as sales
+  // (stock is put back, the changes saved, and the sale recorded again — in one transaction).
+  const { data, error } = order.id
+    ? await ctx.supabase.rpc("edit_order", { p_business: ctx.businessId, p_order: order, p_lines: lines })
+    : await ctx.supabase.rpc("save_order", { p_business: ctx.businessId, p_order: order, p_lines: lines });
   if (error) return fail(friendlyDbError(error, "save_order"));
   revalidateSales();
   return ok({ id: data as string }, order.id ? "Order updated" : "Order created");
@@ -34,9 +38,10 @@ export async function setOrderStatusAction(id: string, status: OrderStatus): Pro
   return ok(undefined, `Order marked ${status}`);
 }
 
-export async function deleteOrderAction(id: string): Promise<ActionResult> {
+/** Deletes an order in any state: stock goes back and (if confirmed) its payments are deleted too. */
+export async function deleteOrderAction(id: string, deletePayments = false): Promise<ActionResult> {
   const ctx = await requireContext();
-  const { error } = await ctx.supabase.rpc("delete_order", { p_order: id });
+  const { error } = await ctx.supabase.rpc("delete_order_completely", { p_order: id, p_delete_payments: deletePayments });
   if (error) return fail(friendlyDbError(error, "delete_order"));
   revalidateSales();
   return ok(undefined, "Order deleted");

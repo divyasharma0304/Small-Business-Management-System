@@ -14,7 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { requireContext } from "@/lib/context";
 import { formatPct, formatQty, titleCase } from "@/lib/format";
-import { loadProduct } from "@/lib/queries/catalog";
+import { loadProduct, loadUndoneIds } from "@/lib/queries/catalog";
 import { signedUrls } from "@/lib/storage";
 
 export const metadata: Metadata = { title: "Item" };
@@ -121,7 +121,7 @@ export default async function ProductPage({ params }: PageProps<"/catalog/[id]">
                           <TableCell className="pr-6 text-right">
                             <div className="flex justify-end gap-1">
                               <AdjustStockDialog
-                                item={{ variant_id: v.id, item_name: nameOf(v), unit: product.unit, quantity: Number(l?.quantity ?? 0), avg_cost: Number(l?.avg_cost ?? 0) }}
+                                item={{ variant_id: v.id, item_name: nameOf(v), unit: product.unit, quantity: Number(l?.quantity ?? 0), avg_cost: Number(l?.avg_cost ?? 0), highest_cost: Math.max(Number(v.cost_price), Number(l?.avg_cost ?? 0)) }}
                                 trigger={<Button size="icon-sm" variant="ghost" aria-label="Adjust stock"><SlidersHorizontal /></Button>}
                               />
                               <Button size="icon-sm" variant="ghost" asChild aria-label="Stock history"><Link href={`/inventory/${v.id}`}><History /></Link></Button>
@@ -146,6 +146,7 @@ export default async function ProductPage({ params }: PageProps<"/catalog/[id]">
                   rows={(txns ?? []).map((t) => ({ ...t, item_name: nameOf(variants.find((v) => v.id === t.variant_id)!), unit: product.unit })) as LedgerRow[]}
                   timeZone={ctx.business.timezone}
                   showItem={product.has_variants}
+                  undone={await loadUndoneIds(ctx, variantIds)}
                 />
               )}
             </div>

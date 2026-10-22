@@ -43,3 +43,14 @@ export async function loadVariantParents(ctx: RequiredContext) {
     .order("name");
   return (data ?? []) as { id: string; name: string; unit: string }[];
 }
+
+/** Ids of stock movements that have been undone (an opposite "reversal" entry points at them). */
+export async function loadUndoneIds(ctx: RequiredContext, variantIds: string[]) {
+  if (variantIds.length === 0) return new Set<string>();
+  const { data } = await ctx.supabase
+    .from("inventory_transactions")
+    .select("reference_id")
+    .eq("reference_type", "reversal")
+    .in("variant_id", variantIds);
+  return new Set((data ?? []).map((r) => r.reference_id as string).filter(Boolean));
+}

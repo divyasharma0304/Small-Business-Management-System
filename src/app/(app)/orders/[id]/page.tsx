@@ -62,18 +62,23 @@ export default async function OrderPage({ params }: PageProps<"/orders/[id]">) {
         description={`${formatDate(order.order_date)} · ${order.customers?.name ?? "Walk-in customer"}`}
         actions={
           <>
-            {!recognized && !closed && payments.length === 0 && (
-              <ConfirmAction
-                trigger={<Button variant="ghost"><Trash2 /> Delete</Button>}
-                title={`Delete ${order.order_number}?`}
-                description="The order hasn't been recorded as a sale, so it can be deleted permanently."
-                confirmLabel="Delete order"
-                destructive
-                action={deleteOrderAction.bind(null, order.id)}
-                redirectTo="/orders"
-              />
-            )}
-            {!recognized && !closed && <Button variant="outline" asChild><Link href={`/orders/${order.id}/edit`}><Pencil /> Edit</Link></Button>}
+            <ConfirmAction
+              trigger={<Button variant="ghost"><Trash2 /> Delete</Button>}
+              title={`Delete ${order.order_number}?`}
+              description={
+                <ul className="list-disc space-y-1 pl-5">
+                  <li>The order is removed permanently.</li>
+                  {order.stock_deducted && !order.stock_reversed && <li>Its items are put back into stock.</li>}
+                  {payments.length > 0 && <li><span className="font-medium text-foreground">{payments.length} payment{payments.length === 1 ? "" : "s"}</span> recorded on it will be deleted too.</li>}
+                  <li>This can&apos;t be undone.</li>
+                </ul>
+              }
+              confirmLabel="Delete order"
+              destructive
+              action={deleteOrderAction.bind(null, order.id, payments.length > 0)}
+              redirectTo="/orders"
+            />
+            {!closed && <Button variant="outline" asChild><Link href={`/orders/${order.id}/edit`}><Pencil /> Edit</Link></Button>}
             <OrderStatusActions
               orderId={order.id}
               status={order.status}
@@ -161,7 +166,7 @@ export default async function OrderPage({ params }: PageProps<"/orders/[id]">) {
               </div>
             </CardHeader>
             <CardContent className="px-0">
-              <PaymentsTable payments={payments} />
+              <PaymentsTable payments={payments} methods={methods} today={today} />
             </CardContent>
           </Card>
         </div>

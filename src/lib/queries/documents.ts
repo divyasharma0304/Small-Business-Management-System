@@ -14,6 +14,7 @@ export async function loadPickerItems(ctx: RequiredContext, purpose: "sale" | "p
     tax_rate: Number(i.tax_rate),
     stock_quantity: i.stock_quantity == null ? null : Number(i.stock_quantity),
     avg_cost: i.avg_cost == null ? null : Number(i.avg_cost),
+    highest_cost: i.highest_cost == null ? null : Number(i.highest_cost),
   }));
 }
 

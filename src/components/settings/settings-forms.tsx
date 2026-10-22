@@ -2,7 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { Loader2, Plus, Save, Trash2, X } from "lucide-react";
+import { Loader2, Pencil, Plus, Save, Trash2, X } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { ConfirmAction } from "@/components/confirm-action";
 import { Field, FormSection } from "@/components/forms/field";
@@ -306,6 +307,7 @@ export function AttributesManager({ attributes }: { attributes: AttributeDefinit
             <li key={a.id} className="flex items-center gap-3 px-3 py-2">
               <span className="font-medium">{a.name}</span>
               <span className="flex-1 truncate text-sm text-muted-foreground">{a.options.length ? a.options.join(", ") : "Free text"}</span>
+              <EditAttributeDialog attribute={a} />
               <ConfirmAction
                 trigger={<Button size="icon-sm" variant="ghost" aria-label={`Delete ${a.name}`}><Trash2 /></Button>}
                 title={`Delete attribute "${a.name}"?`}
@@ -349,5 +351,44 @@ export function DemoDataCard({ hasDemo }: { hasDemo: boolean }) {
         )}
       </div>
     </FormSection>
+  );
+}
+
+function EditAttributeDialog({ attribute }: { attribute: AttributeDefinition }) {
+  const { pending, save } = useSave();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState(attribute.name);
+  const [options, setOptions] = useState(attribute.options.join(", "));
+  return (
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o) { setName(attribute.name); setOptions(attribute.options.join(", ")); } }}>
+      <DialogTrigger asChild>
+        <Button size="icon-sm" variant="ghost" aria-label={`Edit ${attribute.name}`}><Pencil /></Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit attribute</DialogTitle>
+          <DialogDescription>Values already saved on items are kept.</DialogDescription>
+        </DialogHeader>
+        <form
+          id={`attr-${attribute.id}`}
+          className="grid gap-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            save(async () => {
+              const res = await saveAttributeAction(attribute.id, { name, options: options.split(",").map((s) => s.trim()).filter(Boolean) });
+              if (res.ok) setOpen(false);
+              return res;
+            });
+          }}
+        >
+          <Field label="Attribute" htmlFor={`an-${attribute.id}`}><Input id={`an-${attribute.id}`} value={name} onChange={(e) => setName(e.target.value)} /></Field>
+          <Field label="Options (comma separated, optional)" htmlFor={`ao-${attribute.id}`}><Input id={`ao-${attribute.id}`} value={options} onChange={(e) => setOptions(e.target.value)} /></Field>
+        </form>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => setOpen(false)} disabled={pending}>Cancel</Button>
+          <Button type="submit" form={`attr-${attribute.id}`} disabled={pending || !name.trim()}>{pending && <Loader2 className="animate-spin" />} Save</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
