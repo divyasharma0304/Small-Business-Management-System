@@ -131,6 +131,7 @@ export default async function OrderPage({ params }: PageProps<"/orders/[id]">) {
                     ...(order.discount_amount > 0 ? [{ label: "Order discount", value: order.discount_amount, negative: true }] : []),
                     ...(tax.tax_enabled ? [{ label: tax.prices_include_tax ? `${tax.tax_label} (included)` : tax.tax_label, value: order.tax_total, muted: tax.prices_include_tax }] : []),
                     ...(order.shipping_charge > 0 ? [{ label: "Shipping", value: order.shipping_charge }] : []),
+                    ...(order.extra_charges ?? []).map((c) => ({ label: c.label, value: Number(c.amount) })),
                     { label: "Total", value: order.total, strong: true },
                   ]}
                 />

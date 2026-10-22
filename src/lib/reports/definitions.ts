@@ -48,6 +48,7 @@ export const REPORTS: ReportDefinition[] = [
         { line: `Less: ${ctx.business.tax_label} collected`, amount: -s.tax_collected },
         { line: "Revenue (net sales)", amount: s.revenue },
         { line: "  of which shipping charged", amount: s.shipping_revenue },
+        { line: "  of which extra charges (white labelling, custom work…)", amount: s.extra_charges_revenue },
         { line: "  discounts given (already deducted)", amount: s.discounts },
         { line: "Less: cost of goods sold (COGS)", amount: -s.cogs },
         { line: "Gross profit", amount: s.gross_profit },
@@ -69,7 +70,7 @@ export const REPORTS: ReportDefinition[] = [
           { label: "Estimated net profit", value: s.net_profit, type: "money", emphasis: true },
         ],
         note:
-          "Revenue = recognised orders' totals after discounts, excluding tax, including shipping charged. COGS = cost frozen on each order line when the sale was recognised (weighted-average stock cost, or standard cost for untracked items). Gross profit = Revenue − COGS. Estimated net profit = Gross profit − Expenses − stock write-offs/adjustments. Purchases are not expenses: their cost reaches profit through COGS when the goods are sold.",
+          "Revenue = recognised orders' totals after discounts, excluding tax, including shipping and extra charges. COGS = cost frozen on each order line when the sale was recognised (weighted-average stock cost, or standard cost for untracked items). Gross profit = Revenue − COGS. Estimated net profit = Gross profit − Expenses − stock write-offs/adjustments. Purchases are not expenses: their cost reaches profit through COGS when the goods are sold.",
       };
     },
   },

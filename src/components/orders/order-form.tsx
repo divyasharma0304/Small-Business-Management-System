@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
-import { Loader2, Plus, Save } from "lucide-react";
+import { Loader2, Plus, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { LinesEditor, newLine, TotalsPanel, type LineDraft } from "@/components/documents/lines-editor";
 import { Field, FormSection } from "@/components/forms/field";
@@ -26,6 +26,7 @@ export interface OrderDraftInit {
   status: "draft" | "confirmed";
   discount_amount: string;
   shipping_charge: string;
+  extra_charges: { label: string; amount: string }[];
   preferred_payment_method: string;
   notes: string;
   lines: Omit<LineDraft, "key">[];
@@ -97,7 +98,8 @@ export function OrderForm({
     return { ...calc, lines: o.lines.map((l) => (l.variant_id ? calc.lines[j++] : undefined)) as typeof calc.lines };
   }, [calc, o.lines]);
   const shipping = Number(o.shipping_charge || 0);
-  const total = calc.lines_total + shipping;
+  const extra = o.extra_charges.reduce((a, c) => a + (Number(c.amount) || 0), 0);
+  const total = calc.lines_total + shipping + extra;
 
   function submit(status?: "draft" | "confirmed") {
     const lines = o.lines.filter((l) => l.variant_id);
@@ -113,6 +115,7 @@ export function OrderForm({
       status: o.id ? undefined : (status ?? o.status),
       discount_amount: o.discount_amount || 0,
       shipping_charge: o.shipping_charge || 0,
+      extra_charges: o.extra_charges.filter((c) => c.label.trim() || c.amount).map((c) => ({ label: c.label, amount: c.amount || 0 })),
       preferred_payment_method: o.preferred_payment_method || null,
       notes: o.notes,
       lines: lines.map((l) => ({ variant_id: l.variant_id, quantity: l.quantity, unit_price: l.unit_price || 0, discount_amount: l.discount_amount || 0, tax_rate: l.tax_rate || 0, offer_id: l.offer_id ?? null, offer_label: l.offer_label ?? null })),
@@ -198,6 +201,22 @@ export function OrderForm({
             <Field label="Shipping / delivery charge" htmlFor="shipping" error={errors.shipping_charge}>
               <Input id="shipping" type="number" min={0} step="0.01" value={o.shipping_charge} onChange={(e) => set({ shipping_charge: e.target.value })} placeholder="0" />
             </Field>
+            <div className="grid gap-2 sm:col-span-2">
+              <p className="text-sm font-medium">Extra charges</p>
+              {o.extra_charges.map((c, i) => (
+                <div key={i} className="flex gap-2">
+                  <Input aria-label="Charge name" list="extra-charge-names" placeholder="e.g. White labelling" value={c.label} onChange={(e) => set({ extra_charges: o.extra_charges.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)) })} aria-invalid={!!errors[`extra_charges.${i}.label`]} />
+                  <Input aria-label="Charge amount" className="w-32" type="number" min={0} step="0.01" placeholder="0" value={c.amount} onChange={(e) => set({ extra_charges: o.extra_charges.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x)) })} />
+                  <Button type="button" size="icon" variant="ghost" aria-label="Remove charge" onClick={() => set({ extra_charges: o.extra_charges.filter((_, j) => j !== i) })}><Trash2 /></Button>
+                </div>
+              ))}
+              <datalist id="extra-charge-names">
+                {["White labelling", "Custom design", "Custom packaging", "Gift wrapping", "Personalised message", "Rush order"].map((n) => <option key={n} value={n} />)}
+              </datalist>
+              <Button type="button" variant="outline" size="sm" className="justify-self-start" onClick={() => set({ extra_charges: [...o.extra_charges, { label: "", amount: "" }] })}>
+                <Plus /> Add extra charge
+              </Button>
+            </div>
             <Field label="Preferred payment method" htmlFor="pm">
               <SimpleSelect id="pm" value={o.preferred_payment_method || null} allowNone noneLabel="Not specified" onChange={(v) => set({ preferred_payment_method: v === "none" ? "" : v })} options={paymentMethods.map((m) => ({ value: m, label: m }))} />
             </Field>
@@ -213,6 +232,7 @@ export function OrderForm({
               ...(calc.discount > 0 ? [{ label: "Order discount", value: calc.discount, negative: true }] : []),
               ...(tax.enabled ? [{ label: tax.inclusive ? `${tax.label} (included)` : tax.label, value: calc.tax_total, muted: tax.inclusive }] : []),
               ...(shipping > 0 ? [{ label: "Shipping", value: shipping }] : []),
+              ...o.extra_charges.filter((c) => Number(c.amount) > 0).map((c) => ({ label: c.label || "Extra charge", value: Number(c.amount) })),
               { label: "Total", value: total, strong: true },
             ]}
           />

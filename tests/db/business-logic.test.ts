@@ -664,3 +664,22 @@ describe("MRP and offers", () => {
     expect(num(li2.mrp)).toBe(250);
   });
 });
+
+describe("extra charges on orders", () => {
+  const U5 = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  it("adds named extra charges to total and revenue, and validates them", async () => {
+    await createUser(db, U5);
+    const b = await rpc<string>(db, U5, "create_business", [{ name: "Extra Co" }]);
+    const p = await rpc<string>(db, U5, "save_product", [b, { name: "Candle", track_inventory: false }, [{ selling_price: 200 }], []]);
+    const v = (await asUser(db, U5, async (tx) => (await tx.query<{ id: string }>("select id from product_variants where product_id = $1", [p])).rows[0])).id;
+    const o = await rpc<string>(db, U5, "save_order", [b, { status: "confirmed", shipping_charge: 50, extra_charges: [{ label: "White labelling", amount: 150 }, { label: "Custom packaging", amount: 100 }] }, [{ variant_id: v, quantity: 2, unit_price: 200 }]]);
+    const ord = await asUser(db, U5, async (tx) => (await tx.query<Record<string, unknown>>("select total, revenue_amount, extra_charges_total, extra_charges from orders where id = $1", [o])).rows[0]);
+    expect(num(ord.total)).toBe(700);
+    expect(num(ord.revenue_amount)).toBe(700);
+    expect(num(ord.extra_charges_total)).toBe(250);
+    expect((ord.extra_charges as { label: string }[]).map((c) => c.label)).toEqual(["White labelling", "Custom packaging"]);
+    const s = await rpc<Record<string, number>>(db, U5, "report_profit_summary", [b, "2000-01-01", "2100-01-01"]);
+    expect(num(s.extra_charges_revenue)).toBe(250);
+    await expect(rpc(db, U5, "save_order", [b, { extra_charges: [{ label: "", amount: 10 }] }, [{ variant_id: v, quantity: 1, unit_price: 1 }]])).rejects.toThrow(/needs a name/);
+  });
+});

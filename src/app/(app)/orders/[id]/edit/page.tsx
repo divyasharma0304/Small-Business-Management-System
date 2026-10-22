@@ -47,6 +47,7 @@ export default async function EditOrderPage({ params }: PageProps<"/orders/[id]/
           status: "draft",
           discount_amount: order.discount_amount ? String(order.discount_amount) : "",
           shipping_charge: order.shipping_charge ? String(order.shipping_charge) : "",
+          extra_charges: (order.extra_charges ?? []).map((c) => ({ label: c.label, amount: String(c.amount) })),
           preferred_payment_method: order.preferred_payment_method ?? "",
           notes: order.notes ?? "",
           lines: lines.map((l) => ({

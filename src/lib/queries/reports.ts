@@ -6,6 +6,7 @@ import type { RequiredContext } from "@/lib/context";
 export interface ProfitSummary {
   revenue: number;
   shipping_revenue: number;
+  extra_charges_revenue: number;
   tax_collected: number;
   discounts: number;
   gross_sales: number;

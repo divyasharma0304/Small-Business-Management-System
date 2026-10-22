@@ -224,6 +224,8 @@ export interface Order {
   discount_amount: number;
   tax_total: number;
   shipping_charge: number;
+  extra_charges: { label: string; amount: number }[];
+  extra_charges_total: number;
   total: number;
   revenue_amount: number;
   amount_paid: number;

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isoDate, money, optionalDate, optionalText, optionalUuid, percent, positiveMoney, quantity, uuid } from "./common";
+import { requiredText, isoDate, money, optionalDate, optionalText, optionalUuid, percent, positiveMoney, quantity, uuid } from "./common";
 
 export const lineSchema = z.object({
   variant_id: uuid,
@@ -19,6 +19,7 @@ export const orderSchema = z.object({
   status: z.enum(["draft", "confirmed"]).optional(),
   discount_amount: money("Order discount").default(0),
   shipping_charge: money("Shipping charge").default(0),
+  extra_charges: z.array(z.object({ label: requiredText("Charge name", 100), amount: money("Charge amount") })).max(20).default([]),
   preferred_payment_method: optionalText(60),
   notes: optionalText(2000),
   lines: z.array(lineSchema).min(1, "Add at least one item").max(200),

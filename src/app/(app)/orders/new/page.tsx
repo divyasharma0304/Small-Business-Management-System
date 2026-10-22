@@ -26,6 +26,7 @@ export default async function NewOrderPage({ searchParams }: PageProps<"/orders/
           status: ctx.settings.default_order_status === "confirmed" ? "confirmed" : "draft",
           discount_amount: "",
           shipping_charge: "",
+          extra_charges: [],
           preferred_payment_method: "",
           notes: "",
           lines: [],

@@ -79,6 +79,7 @@ export default async function PrintOrderPage({ params }: PageProps<"/print/order
         {order.discount_amount > 0 && <Row label="Discount" value={-order.discount_amount} />}
         {b.tax_enabled && <Row label={b.prices_include_tax ? `${b.tax_label} (included)` : b.tax_label} value={order.tax_total} />}
         {order.shipping_charge > 0 && <Row label="Shipping" value={order.shipping_charge} />}
+        {(order.extra_charges ?? []).map((c, i) => <Row key={i} label={c.label} value={Number(c.amount)} />)}
         <div className="border-t pt-1"><Row label="Total" value={order.total} bold /></div>
         <Row label="Paid" value={order.amount_paid} />
         <Row label="Balance due" value={order.status === "cancelled" || order.status === "returned" ? 0 : Math.max(0, order.total - order.amount_paid)} bold />
